@@ -328,7 +328,8 @@ export class StorageBlob
         this.state = StorageStateClean;
       else
         this.state = StorageStateLoadFailed;
-      this.fsmLoad.setState(result === ESuccess ? FSM.FSM_DONE : FSM.FSM_ERROR);
+      //don't set this here so any load filter has opportunity to fail the load
+      //this.fsmLoad.setState(result === ESuccess ? FSM.FSM_DONE : FSM.FSM_ERROR);
     }
 
   setSaving(): void
@@ -445,6 +446,10 @@ export class StorageBlob
         if (this.params.loadToFilter)
           this.params.loadTo = this.params.loadToFilter(this, this.params.loadTo);
       }
+
+      // load filter might have marked fsmLoad done (or marked load state failed)
+      if (! this.fsmLoad.done)
+        this.fsmLoad.setState(this.isLoadFailed() ? FSM.FSM_ERROR : FSM.FSM_DONE);
 
       // Support auto-delete behavior
       if (this.params.deleteAfterLoad)
