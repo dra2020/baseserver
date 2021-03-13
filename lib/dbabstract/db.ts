@@ -1,5 +1,5 @@
 // Shared libraries
-import { LogAbstract, Context, FSM } from '@dra2020/baseclient';
+import { Util, LogAbstract, Context, FSM } from '@dra2020/baseclient';
 import * as Storage from '../storage/all';
 
 // Custom DB state codes
@@ -189,11 +189,17 @@ export class DBFind extends FSM.Fsm
     }
 }
 
+export interface DBQueryOptions
+{
+  autoContinue?: boolean,
+}
+
 export class DBQuery extends FSM.Fsm
 {
   col: DBCollection;
   filter: any;
   fsmResult: FSM.FsmArray;
+  options: DBQueryOptions;
 
   constructor(env: DBEnvironment, col: DBCollection, filter: any)
     {
@@ -201,10 +207,23 @@ export class DBQuery extends FSM.Fsm
       this.waitOn(col);
       this.col = col;
       this.filter = filter;
-      this.fsmResult = new FSM.FsmArray(env);;
+      this.fsmResult = new FSM.FsmArray(env);
+      this.options = { autoContinue: true };
     }
 
   get result(): any[] { return this.fsmResult.a }
+
+  setOptions(options: DBQueryOptions): DBQuery
+  {
+    Util.shallowAssign(this.options, options);
+    return this;
+  }
+
+  restart(): DBQuery
+  {
+    this.setState(FSM.FSM_STARTING);
+    return this;
+  }
 }
 
 export class DBIndex extends FSM.Fsm

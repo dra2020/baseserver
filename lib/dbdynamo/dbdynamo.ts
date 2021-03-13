@@ -1050,6 +1050,7 @@ export class DynamoFind extends DB.DBFind
 
 
 const FSM_SCANNING = FSM.FSM_CUSTOM1;
+const FSM_PAUSING = FSM.FSM_CUSTOM2;
 
 export class DynamoQuery extends DB.DBQuery
 {
@@ -1101,7 +1102,7 @@ export class DynamoQuery extends DB.DBQuery
           if (result.LastEvaluatedKey)
           {
             this.lastKey = result.LastEvaluatedKey;
-            this.setState(FSM.FSM_STARTING);
+            this.setState(this.options.autoContinue ? FSM.FSM_STARTING : FSM_PAUSING);
           }
           else
           {
@@ -1151,7 +1152,7 @@ export class DynamoQuery extends DB.DBQuery
                 if (result.LastEvaluatedKey)
                 {
                   this.lastKey = result.LastEvaluatedKey;
-                  this.setState(FSM.FSM_STARTING);
+                  this.setState(this.options.autoContinue ? FSM.FSM_STARTING : FSM_PAUSING);
                 }
                 else
                 {
