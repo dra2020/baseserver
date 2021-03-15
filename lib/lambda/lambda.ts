@@ -34,20 +34,33 @@ class FsmList extends FSM.Fsm
   }
 }
 
+interface InvokeOptions
+{
+  isSync?: boolean,
+}
+
 export class FsmInvoke extends FSM.Fsm
 {
   name: string;
   params: any;
   result: any;
+  options: InvokeOptions;
 
   constructor(env: Environment, name: string, params: any)
   {
     super(env);
     this.name = name;
     this.params = Util.shallowAssignImmutable({ context: { production: env.context.xnumber('production') } }, params);
+    this.options = { isSync: true };
   }
 
   get env(): Environment { return this._env as Environment }
+
+  setOptions(options: InvokeOptions): FsmInvoke
+  {
+    Util.shallowAssign(this.options, options);
+    return this;
+  }
 
   tick(): void
   {
@@ -56,7 +69,7 @@ export class FsmInvoke extends FSM.Fsm
       this.setState(FSM.FSM_PENDING);
       let awsparam: any = {
         FunctionName: `${this.name}:${this.env.context.xflag('production') ? 'production' : 'development'}`,
-        InvocationType: 'RequestResponse',
+        InvocationType: this.options.isSync ? 'RequestResponse' : 'Event',
         LogType: 'None',
         Payload: JSON.stringify(this.params)
         };
