@@ -1133,7 +1133,7 @@ export class DynamoQuery extends DB.DBQuery
           if (this.lastKey)
           {
             param.ExclusiveStartKey = this.lastKey;
-            this.lastKey = undefined;
+            delete this.lastKey;
           }
           this.setState(FSM.FSM_PENDING);
           this.dyncol.dynamodb.query(param, (err: any, result: any) => {

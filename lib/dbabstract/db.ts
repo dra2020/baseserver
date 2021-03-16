@@ -202,14 +202,14 @@ export class DBQuery extends FSM.Fsm
   options: DBQueryOptions;
 
   constructor(env: DBEnvironment, col: DBCollection, filter: any)
-    {
-      super(env);
-      this.waitOn(col);
-      this.col = col;
-      this.filter = filter;
-      this.fsmResult = new FSM.FsmArray(env);
-      this.options = { autoContinue: true };
-    }
+  {
+    super(env);
+    this.waitOn(col);
+    this.col = col;
+    this.filter = filter;
+    this.fsmResult = new FSM.FsmArray(env);
+    this.options = { autoContinue: true };
+  }
 
   get result(): any[] { return this.fsmResult.a }
 
@@ -221,6 +221,7 @@ export class DBQuery extends FSM.Fsm
 
   restart(): DBQuery
   {
+    this.fsmResult.reset();
     this.setState(FSM.FSM_STARTING);
     return this;
   }
