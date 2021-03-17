@@ -1,5 +1,6 @@
 // Shared libraries
 import { Util, Context, LogAbstract, FSM } from '@dra2020/baseclient';
+import * as DB from '../dbabstract/all';
 
 import { Environment } from './env';
 
@@ -106,9 +107,69 @@ export class FsmInvoke extends FSM.Fsm
   }
 }
 
+export class FsmEnqueue extends FSM.Fsm
+{
+  guid: string;
+  name: string;
+  params: any;
+  fsmUpdate: DB.DBUpdate;
+
+  constructor(env: Environment, guid: string, name: string, params: any)
+  {
+    super(env);
+    this.guid = guid ? guid : Util.createGuid();
+    this.name = name;
+    this.params = params || {};
+  }
+
+  get env(): Environment { return this._env as Environment }
+
+  tick(): void
+  {
+    if (this.ready && this.isDependentError)
+      this.setState(FSM.FSM_ERROR);
+    else if (this.ready)
+    {
+      switch (this.state)
+      {
+        case FSM.FSM_STARTING:
+          let u = { id: this.guid, functionName: this.name, params: this.params };
+          this.fsmUpdate = this.env.db.createUpdate(this.env.lambdaManager.workqueue, { id: this.guid }, u);
+          this.waitOn(this.fsmUpdate);
+          this.setState(FSM.FSM_PENDING);
+          break;
+
+        case FSM.FSM_PENDING:
+          this.setState(FSM.FSM_DONE);
+          break;
+      }
+    }
+  }
+}
+
+// Duplicated in dra-types/lib/schemas.ts
+const Schema: any =
+    {
+      FileOptions: { map: true },
+      Schema: {
+        id: 'S',
+        priority: 'N',
+        functionName: 'S',
+        params: 'M',
+      },
+      KeySchema: { id: 'HASH' },
+      GlobalSecondaryIndexes: [
+          { priority: 'HASH' },
+        ],
+    };
+
+const THROTTLE_INTERVAL = 1000 * 60 * 15;
+
 export class Manager extends FSM.Fsm
 {
   awslambda: Lambda;
+  workqueue: DB.DBCollection;
+  msThrottle: number;
 
   constructor(env: Environment)
   {
@@ -121,6 +182,20 @@ export class Manager extends FSM.Fsm
   invoke(name: string, params?: any): FsmInvoke
   {
     return new FsmInvoke(this.env, name, params);
+  }
+
+  enqueue(id: string, name: string, params?: any): FsmEnqueue
+  {
+    if (this.workqueue === undefined)
+      this.workqueue = this.env.db.createCollection('workqueue', Schema);
+    let fsm = new FsmEnqueue(this.env, id, name, params);
+    let msNow = (new Date()).getTime();
+    if (this.msThrottle === undefined || msNow > this.msThrottle)
+    {
+      this.msThrottle = msNow + THROTTLE_INTERVAL;
+      this.invoke('workQueue').setOptions({ isSync: false });
+    }
+    return fsm;
   }
 }
 
