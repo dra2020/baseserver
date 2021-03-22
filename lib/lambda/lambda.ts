@@ -109,15 +109,19 @@ export class FsmInvoke extends FSM.Fsm
 
 export class FsmEnqueue extends FSM.Fsm
 {
-  guid: string;
+  options: EnqueueOptions;
   name: string;
   params: any;
   fsmUpdate: DB.DBUpdate;
 
-  constructor(env: Environment, guid: string, name: string, params: any)
+  constructor(env: Environment, options: EnqueueOptions, name: string, params: any)
   {
     super(env);
-    this.guid = guid ? guid : Util.createGuid();
+    this.options = Util.shallowCopy(options);
+    if (! this.options.id)
+      this.options.id = Util.createGuid();
+    if (this.options.priority === undefined)
+      this.options.priority = 0;
     this.name = name;
     this.params = params || {};
   }
@@ -133,8 +137,8 @@ export class FsmEnqueue extends FSM.Fsm
       switch (this.state)
       {
         case FSM.FSM_STARTING:
-          let u = { id: this.guid, functionName: this.name, params: this.params };
-          this.fsmUpdate = this.env.db.createUpdate(this.env.lambdaManager.workqueue, { id: this.guid }, u);
+          let u = { id: this.options.id, priority: this.options.priority, functionName: this.name, params: this.params };
+          this.fsmUpdate = this.env.db.createUpdate(this.env.lambdaManager.workqueue, { id: this.options.id }, u);
           this.waitOn(this.fsmUpdate);
           this.setState(FSM.FSM_PENDING);
           break;
@@ -165,6 +169,12 @@ const Schema: any =
 
 const THROTTLE_INTERVAL = 1000 * 60 * 15;
 
+export interface EnqueueOptions
+{
+  id?: string,
+  priority?: number,
+}
+
 export class Manager extends FSM.Fsm
 {
   awslambda: Lambda;
@@ -184,11 +194,11 @@ export class Manager extends FSM.Fsm
     return new FsmInvoke(this.env, name, params);
   }
 
-  enqueue(id: string, name: string, params?: any): FsmEnqueue
+  enqueue(options: EnqueueOptions, name: string, params?: any): FsmEnqueue
   {
     if (this.workqueue === undefined)
       this.workqueue = this.env.db.createCollection('workqueue', Schema);
-    let fsm = new FsmEnqueue(this.env, id, name, params);
+    let fsm = new FsmEnqueue(this.env, options, name, params);
     let msNow = (new Date()).getTime();
     if (this.msThrottle === undefined || msNow > this.msThrottle)
     {
