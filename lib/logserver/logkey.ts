@@ -107,6 +107,12 @@ export class LogKey
       return true;
   }
 
+  test(dateFilter: string): boolean
+  {
+    if (dateFilter == null || dateFilter == '') return true;
+    return dateFilter === this.yearKey || dateFilter === this.monthKey || dateFilter === this.dateKey;
+  }
+
   get yearID(): string { return `Agg_${this.mode}_${this.yearKey}.json` }
   get monthID(): string { return `Agg_${this.mode}_${this.monthKey}.json` }
   get dateID(): string { return `Agg_${this.mode}_${this.dateKey}.json` }

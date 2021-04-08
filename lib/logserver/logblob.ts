@@ -15,9 +15,16 @@ interface Environment
   storageManager: Storage.StorageManager;
 }
 
+export interface Options
+{
+  dateFilter?: string,
+}
+const DefaultOptions = { dateFilter: '' };
+
 export class LogBlob extends Storage.StorageBlob
 {
   key: LogKey;
+  options: Options;
 
   constructor(env: Environment, params: Storage.BlobParams)
   {
@@ -60,9 +67,10 @@ export class LogBlob extends Storage.StorageBlob
     return blob;
   }
 
-  static createForLs(env: Environment): LogBlob
+  static createForLs(env: Environment, options?: Options): LogBlob
   {
     let blob = new LogBlob(env, { id: '' });
+    blob.options = Util.shallowAssignImmutable(DefaultOptions, options);
     blob.startList(env.storageManager);
     return blob;
   }
@@ -72,7 +80,7 @@ export class LogBlob extends Storage.StorageBlob
     let key = LogKey.create(s);
     if (key == null) return false;
     let mode = this.env.context.xflag('production') ? 'Prod' : 'Dev';
-    return key.mode === mode;
+    return key.mode === mode && key.test(this.options.dateFilter);
   }
 
   asString(): string

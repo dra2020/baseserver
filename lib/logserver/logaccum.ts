@@ -19,7 +19,8 @@ export interface Environment
 
 export interface AccumOptions
 {
-  onlyAggregateClosed?: boolean;
+  onlyAggregateClosed?: boolean,
+  dateFilter?: string,
 }
 const DefaultOptions = { onlyAggregateClosed: false };
 
