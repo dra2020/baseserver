@@ -1407,7 +1407,7 @@ export class FsmLogAccum extends FSM.Fsm
       switch (this.state)
       {
         case FSM.FSM_STARTING:
-          this.blobLs = LogBlob.createForLs(this.env);
+          this.blobLs = LogBlob.createForLs(this.env, this.options);
           this.waitOn(this.blobLs.fsmArray);
           this.setState(FSM_LISTING);
           break;
