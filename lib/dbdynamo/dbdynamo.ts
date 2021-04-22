@@ -629,12 +629,14 @@ export class DynamoCollection extends DB.DBCollection
 
   toInternalExpression(o: any): any
   {
-    let ex: any = {};
-    let j: number = 0;
-    let ev: any = {};
-    ex.ExpressionAttributeValues = ev;
+    let expr: any = {};
+    let j: number = 1;
     let en: any = {};
-    ex.ExpressionAttributeNames = en;
+    expr.ExpressionAttributeNames = en;
+    let ev: any = {};
+    expr.ExpressionAttributeValues = ev;
+    en['#n0'] = '_atomicUpdate';
+    ev[':v0'] = { N: '1' };
     for (let p in o) if (o.hasOwnProperty(p))
     {
       if (this.keyIndex[p] === undefined)
@@ -650,13 +652,13 @@ export class DynamoCollection extends DB.DBCollection
     }
 
     // Ensure we don't have an empty update expression
-    if (Util.countKeys(ex.ExpressionAttributeNames) == 0)
+    if (Util.countKeys(expr.ExpressionAttributeNames) == 0)
     {
-      ex.ExpressionAttributeNames['#n0'] = '__nonempty';
-      ex.ExpressionAttributeValues[':v0'] = { NULL: true };
+      expr.ExpressionAttributeNames['#n0'] = '__nonempty';
+      expr.ExpressionAttributeValues[':v0'] = { NULL: true };
     }
 
-    return ex;
+    return expr;
   }
 
   toTestExpression(expr: any): string
@@ -675,7 +677,7 @@ export class DynamoCollection extends DB.DBCollection
     let saAdd: string[] = [];
     let j: number = 0;
     let n: number = Util.countKeys(expr.ExpressionAttributeNames);
-    for (let i: number = 0; i < n; i++)
+    for (let i: number = 1; i < n; i++)
     {
       let sv = `:v${i}`;
       let sn = `#n${i}`;
@@ -686,9 +688,9 @@ export class DynamoCollection extends DB.DBCollection
         saSet.push(`${sn} = ${sv}`);
     }
 
-    let fullExpr: string = '';
+    let fullExpr: string = 'ADD #n0 :v0';
     if (saSet.length > 0)
-      fullExpr += `SET ${saSet.join(', ')}`;
+      fullExpr += ` SET ${saSet.join(', ')}`;
     if (saAdd.length > 0)
       fullExpr += ` ADD ${saAdd.join(', ')}`;
     return fullExpr;
@@ -698,9 +700,8 @@ export class DynamoCollection extends DB.DBCollection
   {
     let saRemove: string[] = [];
     let saDelete: string[] = [];
-    let j: number = 0;
     let n: number = Util.countKeys(expr.ExpressionAttributeNames);
-    for (let i: number = 0; i < n; i++)
+    for (let i: number = 1; i < n; i++)
     {
       let sv = `:v${i}`;
       let sn = `#n${i}`;
@@ -717,9 +718,9 @@ export class DynamoCollection extends DB.DBCollection
     if (Util.isEmpty(expr.ExpressionAttributeValues))
       delete expr.ExpressionAttributeValues;
 
-    let fullExpr: string = '';
+    let fullExpr: string = 'ADD #n0 :v0';
     if (saRemove.length > 0)
-      fullExpr += `REMOVE ${saRemove.join(', ')}`;
+      fullExpr += ` REMOVE ${saRemove.join(', ')}`;
     if (saDelete.length > 0)
       fullExpr += ` DELETE ${saDelete.join(', ')}`;
     return fullExpr;
@@ -793,6 +794,7 @@ export class DynamoUpdate extends DB.DBUpdate
         this.setState(FSM.FSM_PENDING);
         let params: any = Util.shallowAssignImmutable(this.query, this.values);
         params.UpdateExpression = this.dyncol.toUpdateExpression(params);
+        params.ReturnValues = 'ALL_NEW';
         if (params.UpdateExpression === '')
         {
           this.setState(FSM.FSM_DONE);
@@ -809,7 +811,7 @@ export class DynamoUpdate extends DB.DBUpdate
             else
             {
               this.setState(FSM.FSM_DONE);
-              this.result = result;
+              this.result = this.dyncol.toExternal(result.Attributes);
               this.trace.log();
               if (this.env.context.xnumber('verbosity'))
                 this.env.log.event({ event: 'dynamodb: updateItem', detail: JSON.stringify(result) });
@@ -864,6 +866,7 @@ export class DynamoUnset extends DB.DBUnset
         this.setState(FSM.FSM_PENDING);
         let params: any = Util.shallowAssignImmutable(this.query, this.values);
         params.UpdateExpression = this.dyncol.toRemoveExpression(params);
+        params.ReturnValues = 'ALL_NEW';
         this.dyncol.dynamodb.updateItem(params, (err: any, result: any) => {
             if (this.done)
               return;
@@ -876,7 +879,7 @@ export class DynamoUnset extends DB.DBUnset
             else
             {
               this.setState(FSM.FSM_DONE);
-              this.result = result;
+              this.result = this.dyncol.toExternal(result.Attributes);
               this.trace.log();
               if (this.env.context.xnumber('verbosity'))
                 this.env.log.event({ event: 'dynamodb: unset', detail: JSON.stringify(result) });

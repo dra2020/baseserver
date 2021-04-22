@@ -6,6 +6,9 @@ var externals = { 'aws-sdk': 'aws-sdk' };
 fs.readdirSync('node_modules').filter(s => s !== '.bin').forEach(s => { externals[s] = `commonjs ${s}` });
 fs.readdirSync('node_modules/@dra2020').forEach(s => { s = `@dra2020/${s}`; externals[s] = `commonjs ${s}` });
 
+// why is tinyqueue special?
+delete externals['tinyqueue'];
+
 var libConfig = {
     entry: {
       library: './lib/all/all.ts'
