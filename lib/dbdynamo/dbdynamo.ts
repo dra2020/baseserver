@@ -629,6 +629,9 @@ export class DynamoCollection extends DB.DBCollection
 
   toInternalExpression(o: any): any
   {
+    // Make sure _atomicUpdate isn't explicitly specified
+    delete o._atomicUpdate;
+
     let expr: any = {};
     let j: number = 1;
     let en: any = {};
