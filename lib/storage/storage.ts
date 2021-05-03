@@ -215,16 +215,19 @@ export class StorageBlob
 
   needSave(): boolean
     {
-      if (this.state == StorageStateDirty)
+      if (this.state == StorageStateDirty) // Note this test fails if Dirty && Saving
         return true;
       if (this.state == StorageStateClean)
         return false;
 
+      /*
+       * Don't retry at this level
       if (this.isDirty() && this.isSaving())
       {
         let now = new Date();
         return now.getTime() - this.tStarted.getTime() > this.env.context.xnumber('StorageRetryDelay');
       }
+      */
 
       // Not loaded, either not yet, or load failed
       return false;
