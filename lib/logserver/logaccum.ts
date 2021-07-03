@@ -20,6 +20,7 @@ export interface Environment
 export interface AccumOptions
 {
   onlyAggregateClosed?: boolean,
+  dontAggregate?: boolean,
   dateFilter?: string,
 }
 const DefaultOptions = { onlyAggregateClosed: false };
@@ -35,6 +36,49 @@ const FSM_ACCUM = FSM.FSM_CUSTOM1;
 
 const MaxPendingDownloads = 50;
 const MaxPendingUploads = 50;
+
+function coalesceInstances(o: any): void
+{
+  if (o)
+    if (o.instances)
+    {
+      let all: any = {};
+      //console.log(`coalesceInstances: coalescing ${Util.countKeys(o.instances)} to 1`);
+      Object.values(o.instances).forEach((v: any) => Util.deepAccum(all, v));
+      o.instances = { all: all };
+    }
+    else if (typeof o === 'object')
+      Object.values(o).forEach(coalesceInstances);
+}
+
+function collapseEvents(ia: ILogAccumulator): void
+{
+  // These are events that mistakenly included data-specific content so resulted
+  // in explosion of number of events. This re-collapses them on aggregation since
+  // log processing assumes # of unique events stays "reasonable" vs. based on size of content
+  // or amount of activity.
+  const collapseList = [
+      { from: 'computesplits: uploaded _', to: 'computeSplits: uploaded' },
+    ];
+  let nCollapsed = 0;
+  if (ia && ia.events && ia.events.instances)
+    Object.values(ia.events.instances).forEach((id: IDayAccumulator) => {
+        Object.values(id).forEach((iv: IValueAccumulatorIndex) => {
+          Object.keys(iv).forEach(k => {
+              collapseList.forEach(l => {
+                  if (k.indexOf(l.from) == 0)
+                  {
+                    iv[l.to] = Util.deepAccum(iv[l.to], iv[k]);
+                    delete iv[k];
+                    nCollapsed++;
+                  }
+                });
+            });
+        });
+      });
+  //if (nCollapsed)
+    //console.log(`collapseEvents: collapsed ${nCollapsed} events`);
+}
 
 class FsmAggregate extends FSM.Fsm
 {
@@ -92,7 +136,8 @@ class FsmAggregate extends FSM.Fsm
 
       if (item.key.isLog)
       {
-        LogAccumulator.gather(la, item.id, item.key.instance, item.key.dateKey, item.blob.result);
+        let instance = 'all'; // item.key.instance
+        LogAccumulator.gather(la, item.id, instance, item.key.dateKey, item.blob.result);
         if (bClosed) delete item.blob;
       }
       else
@@ -102,6 +147,8 @@ class FsmAggregate extends FSM.Fsm
           if (item.blob)
           {
             item.accum = JSON.parse(item.blob.result);
+            coalesceInstances(item.accum);
+            collapseEvents(item.accum);
             delete item.blob;
           }
           else
@@ -117,7 +164,7 @@ class FsmAggregate extends FSM.Fsm
     // Save memory - don't need children if I won't re-aggregate with new data (from above - test for closed)
     if (bClosed)
     {
-      if (! this.item.present)
+      if (! this.item.present && ! this.options.dontAggregate)
       {
         this.env.log.chatter(`logaccum: saving ${this.item.id}`);
         let blob = LogBlob.createForUpload(this.env, this.item.id, JSON.stringify(this.item.accum));
@@ -212,6 +259,8 @@ class FsmSaveAggregates extends FSM.Fsm
     this.root = root;
     this.items = root.query((item: LogItem) => { return item.accum !== undefined && !item.present && item.key.closed });
     this.cur = 0;
+    if (this.options.dontAggregate)
+      this.setState(FSM.FSM_DONE);
   }
 
   get env(): Environment { return this._env as Environment }
