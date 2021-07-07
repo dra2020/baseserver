@@ -414,6 +414,7 @@ class LogManager implements LogAbstract.ILog
   curLog: LogInstance;
   msLatencyDump: number;
   msLatencyStamp: number;
+  onlyUploadErrors: boolean;
   stamps: any[];
   toconsole: boolean;
   msExpireDump: number;
@@ -434,6 +435,7 @@ class LogManager implements LogAbstract.ILog
     this.toconsole = env.context.xflag('log_to_console');
     this.msLatencyDump = env.context.xnumber('maxloglatency');
     this.msLatencyStamp = env.context.xnumber('logtimeresolution');
+    this.onlyUploadErrors = env.context.xflag('onlyuploaderrors');
     let msNow = (new Date()).getTime();
     this.msExpireDump = msNow + this.msLatencyDump;
     this.msExpireStamp = msNow + this.msLatencyStamp;
@@ -480,6 +482,9 @@ class LogManager implements LogAbstract.ILog
     if (verbosity > this.env.context.xnumber('verbosity'))
       return;
 
+    if (o.kind === 'error')
+      this.onlyUploadErrors = false;
+
     let msNow = (new Date()).getTime();
 
     if (o.kind === undefined)
@@ -508,13 +513,17 @@ class LogManager implements LogAbstract.ILog
 
   rotateLog(): FSM.Fsm
   {
-    let prod = this.env.context.xflag('production') ? 'Prod' : 'Dev';
-    let fsm = new FsmUpload(this.env, `Log_${prod}_${Util.Now()}_${this.nextid++}_${this.id}.csv`, this.curLog);
-    this.curLog = new LogInstance(this.env);
-    this.schemaManager.clear();
-    this.templateManager.clear();
-    this.msExpireDump = (new Date()).getTime() + this.msLatencyDump;
-    return fsm;
+    if (! this.onlyUploadErrors)
+    {
+      let prod = this.env.context.xflag('production') ? 'Prod' : 'Dev';
+      let fsm = new FsmUpload(this.env, `Log_${prod}_${Util.Now()}_${this.nextid++}_${this.id}.csv`, this.curLog);
+      this.curLog = new LogInstance(this.env);
+      this.schemaManager.clear();
+      this.templateManager.clear();
+      this.msExpireDump = (new Date()).getTime() + this.msLatencyDump;
+      return fsm;
+    }
+    return null;
   }
 
   dump(): FSM.Fsm
