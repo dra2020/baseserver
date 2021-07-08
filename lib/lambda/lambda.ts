@@ -167,7 +167,7 @@ const Schema: any =
         ],
     };
 
-const THROTTLE_INTERVAL = 1000 * 60 * 15;
+const THROTTLE_INTERVAL = 1000 * 60;
 
 export interface EnqueueOptions
 {
@@ -194,17 +194,22 @@ export class Manager extends FSM.Fsm
     return new FsmInvoke(this.env, name, params);
   }
 
-  enqueue(options: EnqueueOptions, name: string, params?: any): FsmEnqueue
+  doWork(): void
   {
-    if (this.workqueue === undefined)
-      this.workqueue = this.env.db.createCollection('workqueue', Schema);
-    let fsm = new FsmEnqueue(this.env, options, name, params);
     let msNow = (new Date()).getTime();
     if (this.msThrottle === undefined || msNow > this.msThrottle)
     {
       this.msThrottle = msNow + THROTTLE_INTERVAL;
       this.invoke('workQueue').setOptions({ isSync: false });
     }
+  }
+
+  enqueue(options: EnqueueOptions, name: string, params?: any): FsmEnqueue
+  {
+    if (this.workqueue === undefined)
+      this.workqueue = this.env.db.createCollection('workqueue', Schema);
+    let fsm = new FsmEnqueue(this.env, options, name, params);
+    this.doWork();
     return fsm;
   }
 }
