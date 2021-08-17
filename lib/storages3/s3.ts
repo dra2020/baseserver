@@ -293,8 +293,8 @@ export class StorageManager extends Storage.StorageManager
     let id: string = `load+${blob.params.id}+${this.count++}`;
 
     this.env.log.event('S3: load start', 1);
-    let trace = new LogAbstract.AsyncTimer(this.env.log, 'S3: load', 1);
     let params = { Bucket: this.blobBucket(blob), Key: blob.params.id };
+    let trace = new LogAbstract.AsyncTimer(this.env.log, `S3: load (${params.Bucket})`);
     let rq = new S3Request(blob);
     this.loadBlobIndex[id] = rq;
     blob.setLoading();
@@ -344,8 +344,8 @@ export class StorageManager extends Storage.StorageManager
     let id: string = `head+${blob.params.id}+${this.count++}`;
 
     this.env.log.event('S3: head start', 1);
-    let trace = new LogAbstract.AsyncTimer(this.env.log, 'S3: head', 1);
     let params = { Bucket: this.blobBucket(blob), Key: blob.params.id };
+    let trace = new LogAbstract.AsyncTimer(this.env.log, `S3: head (${params.Bucket})`);
     let rq = new S3Request(blob);
     this.headBlobIndex[id] = rq;
     blob.setLoading();
@@ -403,8 +403,8 @@ export class StorageManager extends Storage.StorageManager
 
     this.env.log.event('S3: save start', 1);
 
-    let trace = new LogAbstract.AsyncTimer(this.env.log, 'S3: save', 1);
     let params: any = { Bucket: this.blobBucket(blob), Key: blob.params.id };
+    let trace = new LogAbstract.AsyncTimer(this.env.log, `S3: save (${params.Bucket})`);
     if (blob.params.ContentEncoding)
       params['ContentEncoding'] = blob.params.ContentEncoding;
     if (blob.params.ContentType)
@@ -474,8 +474,8 @@ export class StorageManager extends Storage.StorageManager
 
     this.env.log.event(`S3: del start`, 1);
 
-    let trace = new LogAbstract.AsyncTimer(this.env.log, 'S3: del', 1);
     let params = { Bucket: this.blobBucket(blob), Key: blob.params.id };
+    let trace = new LogAbstract.AsyncTimer(this.env.log, `S3: del (${params.Bucket})`);
     let rq = new S3Request(blob);
     this.delBlobIndex[id] = rq;
     blob.setDeleting();
@@ -509,8 +509,8 @@ export class StorageManager extends Storage.StorageManager
 
     this.env.log.event(`S3: ls start`, 1);
 
-    let trace = new LogAbstract.AsyncTimer(this.env.log, 'S3: ls', 1);
     let params: any = { Bucket: b };
+    let trace = new LogAbstract.AsyncTimer(this.env.log, `S3: ls (${params.Bucket})`);
     if (continuationToken)
       params.ContinuationToken = continuationToken;
     let rq = new S3Request(blob);
