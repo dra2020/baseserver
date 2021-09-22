@@ -184,7 +184,12 @@ export class Manager extends FSM.Fsm
   constructor(env: Environment)
   {
     super(env);
-    this.awslambda = new Lambda({ apiVersion: '2015-03-31', region: 'us-west-2' });
+    this.awslambda = new Lambda(
+      {
+        apiVersion: '2015-03-31',
+        region: 'us-west-2',
+        httpOptions: { timeout: 300000 },
+      });
   }
 
   get env(): Environment { return this._env as Environment }
