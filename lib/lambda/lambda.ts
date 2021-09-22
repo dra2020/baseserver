@@ -93,7 +93,7 @@ export class FsmInvoke extends FSM.Fsm
           else if (this.result && this.result.errorMessage)
           {
             this.result = { result: 1, message: this.result.errorMessage };
-            this.env.log.chatter(`lambdamanager: invoke failure: ${this.name}`);
+            this.env.log.chatter(`lambdamanager: invoke failure: ${this.name}(${JSON.stringify(this.params)}): ${this.result.errorMessage})`);
             this.env.log.event(`lambdamanager: invoke failure: ${this.name}`);
             this.setState(FSM.FSM_ERROR);
           }
