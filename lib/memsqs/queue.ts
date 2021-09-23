@@ -84,13 +84,18 @@ class QQueue
   dumpLog(): void
     {
       console.log(`memsqs: queue: ${this.id}: ${this.nHeld} messages held`);
+      let owners: { [owner: string]: number } = {};
       this.forEachGroup((g: QGroup) => {
           if (! g.messages.isempty())
             console.log(`memsqs: queue ${this.id}: group: ${g.id}: non-empty`);
           if (g.visibility.owner != '')
+          {
             console.log(`memsqs: queue ${this.id}: group: ${g.id}: owned by ${g.visibility.owner}`);
+            owners[g.visibility.owner] = (owners[g.visibility.owner || 0) + 1;
+          }
           return true;
         });
+      console.log(`memsqs: queue owner counts: ${Object.values(owners).join(', ')}`);
     }
 
   setOptions(options: QQueueOptions)
