@@ -91,7 +91,7 @@ class QQueue
           if (g.visibility.owner != '')
           {
             console.log(`memsqs: queue ${this.id}: group: ${g.id}: owned by ${g.visibility.owner}`);
-            owners[g.visibility.owner] = (owners[g.visibility.owner || 0) + 1;
+            owners[g.visibility.owner] = (owners[g.visibility.owner] || 0) + 1;
           }
           return true;
         });
