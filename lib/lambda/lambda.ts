@@ -93,7 +93,7 @@ export class FsmInvoke extends FSM.Fsm
           else if (this.result && this.result.errorMessage)
           {
             this.result = { result: 1, message: this.result.errorMessage };
-            this.env.log.chatter(`lambdamanager: invoke failure: ${this.name}`);
+            this.env.log.chatter(`lambdamanager: invoke failure: ${this.name}(${JSON.stringify(this.params)}): ${this.result.errorMessage})`);
             this.env.log.event(`lambdamanager: invoke failure: ${this.name}`);
             this.setState(FSM.FSM_ERROR);
           }
@@ -184,7 +184,12 @@ export class Manager extends FSM.Fsm
   constructor(env: Environment)
   {
     super(env);
-    this.awslambda = new Lambda({ apiVersion: '2015-03-31', region: 'us-west-2' });
+    this.awslambda = new Lambda(
+      {
+        apiVersion: '2015-03-31',
+        region: 'us-west-2',
+        httpOptions: { timeout: 300000 },
+      });
   }
 
   get env(): Environment { return this._env as Environment }
