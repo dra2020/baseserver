@@ -47,11 +47,12 @@ type QGroupIndex = { [id: string]: QGroup };
 
 export interface QQueueOptions
 {
-  timeoutVisibility: number,
-  timeoutDead: number,
-  timeoutQueueDead: number,
-  receiveLimit: number,
-  longpoll: boolean,
+  timeoutVisibility?: number,
+  timeoutDead?: number,
+  timeoutQueueDead?: number,
+  receiveLimit?: number,
+  longpoll?: boolean,
+  ownerOnly?: boolean,
 }
 
 const DefaultQueueOptions = {
@@ -60,6 +61,7 @@ const DefaultQueueOptions = {
   timeoutQueueDead: 1000 * 60 * 30, // 30 minutes - just cleaning up dead server queue
   receiveLimit: 10,                 // don't get too greedy, but some batching for efficiency
   longpoll: true,
+  ownerOnly: false,                 // receive behavior
 };
 
 class QQueue
@@ -100,7 +102,7 @@ class QQueue
 
   setOptions(options: QQueueOptions)
     {
-      this.options = Util.shallowCopy(options);
+      this.options = Util.shallowAssignImmutable(this.options, options);
     }
 
   _group(id: string): QGroup
@@ -182,8 +184,7 @@ class QQueue
             if (g.visibility.owner !== '')
             {
               this.nHeld++;
-              let o = g.visibility.owner;
-              let gm: QMessage = { messageid: m.messageid + o, groupid: o, contents: m.contents, seqno: this.seqno++ };
+              let gm: QMessage = { messageid: m.messageid + g.id, groupid: g.id, contents: m.contents, seqno: this.seqno++ };
               e = g.messages.insert(gm.messageid, { m: gm, pending: false, deadline: new Util.Deadline(this.options.timeoutDead) } );
               return e == null;
             }
@@ -245,7 +246,7 @@ class QQueue
         });
 
       // Now go through and add messages for any unclaimed message groups
-      if (result.length >= this.options.receiveLimit) return;
+      if (this.options.ownerOnly || result.length >= this.options.receiveLimit) return;
 
       this.forEachGroup((g: QGroup) => {
           if (g.visibility.owner === '')
