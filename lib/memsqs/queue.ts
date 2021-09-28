@@ -76,7 +76,7 @@ class QQueue
   constructor(id: string, options?: QQueueOptions)
     {
       this.id = id;
-      this.options = options ? options : Util.shallowCopy(DefaultQueueOptions);
+      this.options = Util.shallowAssignImmutable(DefaultQueueOptions, options);
       this.groups = {};
       this.nHeld = 0;
       this.seqno = 0;
