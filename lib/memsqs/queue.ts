@@ -130,7 +130,7 @@ class QQueue
 
   get isActive(): boolean
     {
-      if (this.nHeld > 0) return true;
+      if (this.nHeld > 0 || this.id === 'admin') return true;
 
       this.lastActive.end();
       return this.lastActive.ms() < this.options.timeoutQueueDead;
