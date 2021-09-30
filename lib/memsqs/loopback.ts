@@ -27,6 +27,7 @@ export class SQSClientLoopback
 
   send(queueid: string, m: Q.QMessage, cb: C.SQSCallback): void
   {
+    if (m.groupid === '*') return;  // eat broadcast messages
     let q = messageList[queueid];
     if (q === undefined)
       q = [], messageList[queueid] = q;
