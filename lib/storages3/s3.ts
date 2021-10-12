@@ -96,7 +96,10 @@ class S3Request implements Storage.BlobRequest
   _dataToProps(data: any): Storage.BlobProperties
   {
     let props: Storage.BlobProperties = {};
-    props.ContentLength = (data.Size !== undefined) ? data.Size : 0;
+    if (data.Size !== undefined)
+      props.ContentLength = data.Size;
+    else if (data.ContentLength !== undefined)
+      props.ContentLength = data.ContentLength;
     props.Key = data.Key;
     props.ETag = data.ETag;
     props.LastModified = data.LastModified;
