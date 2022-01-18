@@ -37,6 +37,8 @@ export interface TransferParams
 {
   op: TransferUrlOp;
   contentType?: string;
+  key?: string;
+  bucket?: string;
 }
 
 // Where does the source data for save come from?
@@ -61,18 +63,13 @@ export interface BlobParams
 
 export class FsmTransferUrl extends FSM.Fsm
 {
-  bucket: string;
-  key: string;
   params: TransferParams;
   url: string;
 
-  constructor(env: Environment, bucket: string, params: TransferParams)
+  constructor(env: Environment, params: TransferParams)
   {
     super(env);
-    this.bucket = bucket;
-    this.params = Util.shallowAssignImmutable({ contentType: 'text/plain; charset=UTF-8' }, params);
-    this.key = Util.createGuid();
-    this.url = undefined;
+    this.params = Util.shallowAssignImmutable({ contentType: 'text/plain; charset=UTF-8', key: Util.createGuid() }, params);
   }
 }
 

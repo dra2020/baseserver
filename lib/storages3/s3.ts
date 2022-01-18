@@ -7,7 +7,7 @@ import * as zlib from 'zlib';
 import * as S3 from 'aws-sdk/clients/s3';
 
 // Shared libraries
-import { Context, LogAbstract, FSM } from '@dra2020/baseclient';
+import { Context, LogAbstract, Util, FSM } from '@dra2020/baseclient';
 
 import * as Storage from '../storage/all';
 
@@ -245,9 +245,9 @@ export class FsmTransferUrl extends Storage.FsmTransferUrl
 {
   storageManager: StorageManager;
 
-  constructor(env: Environment, bucket: string, params: Storage.TransferParams)
+  constructor(env: Environment, params: Storage.TransferParams)
   {
-    super(env, bucket, params);
+    super(env, params);
   }
 }
 
@@ -539,10 +539,11 @@ export class StorageManager extends Storage.StorageManager
 
   createTransferUrl(params: Storage.TransferParams): Storage.FsmTransferUrl
   {
-    let fsm = new FsmTransferUrl(this.env, this.lookupBucket('transfers'), params);
+    params = Util.shallowAssignImmutable({ bucket: this.lookupBucket(params.bucket || 'transfers') }, params);
+    let fsm = new FsmTransferUrl(this.env, params);
     if (fsm === null)
     {
-      let params: any = { Bucket: fsm.bucket, Fields: { key: fsm.key } };
+      let params: any = { Bucket: fsm.params.bucket, Fields: { key: fsm.params.key } };
       this.s3.createPresignedPost(params, (err: any, url: string) => {
           if (err)
           {
@@ -558,7 +559,7 @@ export class StorageManager extends Storage.StorageManager
     }
     else
     {
-      let s3params: any = { Bucket: fsm.bucket, Key: fsm.key };
+      let s3params: any = { Bucket: fsm.params.bucket, Key: fsm.params.key };
       if (params.op === 'putObject') s3params.ContentType = fsm.params.contentType;
       this.s3.getSignedUrl(params.op, s3params, (err: any, url: string) => {
           if (err)
