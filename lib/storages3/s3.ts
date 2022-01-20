@@ -560,7 +560,12 @@ export class StorageManager extends Storage.StorageManager
     else
     {
       let s3params: any = { Bucket: fsm.params.bucket, Key: fsm.params.key };
-      if (params.op === 'putObject') s3params.ContentType = fsm.params.contentType;
+      if (params.op === 'putObject' && params.contentType)
+        s3params['ContentType'] = params.contentType;
+      if (params.op === 'putObject' && params.contentEncoding)
+        s3params['ContentEncoding'] = params.contentEncoding;
+      if (params.op === 'putObject' && params.cacheControl)
+        s3params['CacheControl'] = params.cacheControl;
       this.s3.getSignedUrl(params.op, s3params, (err: any, url: string) => {
           if (err)
           {

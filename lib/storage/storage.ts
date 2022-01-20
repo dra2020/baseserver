@@ -37,6 +37,8 @@ export interface TransferParams
 {
   op: TransferUrlOp;
   contentType?: string;
+  contentEncoding?: string;
+  cacheControl?: string;
   key?: string;
   bucket?: string;
 }
