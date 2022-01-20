@@ -539,7 +539,7 @@ export class StorageManager extends Storage.StorageManager
 
   createTransferUrl(params: Storage.TransferParams): Storage.FsmTransferUrl
   {
-    params = Util.shallowAssignImmutable({ bucket: this.lookupBucket(params.bucket || 'transfers') }, params);
+    params = Util.shallowAssignImmutable(params, { bucket: this.lookupBucket(params.bucket || 'transfers') });
     let fsm = new FsmTransferUrl(this.env, params);
     if (fsm === null)
     {
