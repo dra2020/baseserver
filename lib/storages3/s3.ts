@@ -182,7 +182,7 @@ export class FsmStreamLoader extends FSM.Fsm
       {
 
         case FSM.FSM_STARTING:
-          this.sm.s3.getObject(this.param, (err: any, data: any) => {
+          this.sm.s3(this.blob).getObject(this.param, (err: any, data: any) => {
               if (err == null)
               {
                 // On first chunk, figure out if we need to pipe through gunzip
@@ -253,12 +253,13 @@ export class FsmTransferUrl extends Storage.FsmTransferUrl
 
 export class StorageManager extends Storage.StorageManager
 {
-  s3: any;
+  s3map: any;
   count: number;
 
   constructor(env: Environment, bucketMap?: Storage.BucketMap)
   {
     super(env, bucketMap);
+    this.s3map = {};
 
     if (this.env.context.xstring('aws_access_key_id') === undefined
         || this.env.context.xstring('aws_secret_access_key') === undefined)
@@ -268,7 +269,15 @@ export class StorageManager extends Storage.StorageManager
       process.exit(1);
     }
 
-    this.s3 = new S3({apiVersion: '2006-03-01', region: 'us-west-2'});
+    this.s3map[''] = new S3({apiVersion: '2006-03-01', region: 'us-west-2'});
+    if (this.env.context.xstring('b2_application_key_id') !== undefined
+        && this.env.context.xstring('b2_application_key') !== undefined)
+      this.s3map['bb'] = new S3({
+                          apiVersion: '2006-03-01',
+                          endpoint: 's3.us-west-004.backblazeb2.com',
+                          accessKeyId: this.env.context.xstring('b2_application_key_id'),
+                          secretAccessKey: this.env.context.xstring('b2_application_key'),
+                        });
     this.count = 0;
   }
 
@@ -276,9 +285,27 @@ export class StorageManager extends Storage.StorageManager
 
   lookupBucket(s: string): string
   {
+    let re = /^([^.]+)\.(.*)$/;
+    let a = re.exec(s);
+    if (a && a.length == 3)
+      s = a[2];
+
     while (this.bucketMap[s] !== undefined)
       s = this.bucketMap[s];
     return s;
+  }
+
+  s3OfBucket(bucket: string): any
+  {
+    let re = /^([^.]+)\.(.*)$/;
+
+    let a = re.exec(bucket);
+    return (a && a.length == 3 && this.s3map[a[1]]) ? this.s3map[a[1]] : this.s3map[''];
+  }
+
+  s3(blob: Storage.StorageBlob): any
+  {
+    return this.s3OfBucket(blob.params.bucket);
   }
 
   blobBucket(blob: Storage.StorageBlob): string
@@ -312,7 +339,7 @@ export class StorageManager extends Storage.StorageManager
     }
     else
     {
-      rq.req = this.s3.getObject(params, (err: any, data: any) => {
+      rq.req = this.s3(blob).getObject(params, (err: any, data: any) => {
           this._finishLoad(blob, id, rq, err, data);
           trace.log();
         });
@@ -352,7 +379,7 @@ export class StorageManager extends Storage.StorageManager
     let rq = new S3Request(blob);
     this.headBlobIndex[id] = rq;
     blob.setLoading();
-    rq.req = this.s3.headObject(params, (err: any, data: any) => {
+    rq.req = this.s3(blob).headObject(params, (err: any, data: any) => {
         rq.res = this;
         if (err)
           rq.err = err;
@@ -445,7 +472,7 @@ export class StorageManager extends Storage.StorageManager
       body =  zlib.gzipSync(body);
 
     params.Body = body;
-    rq.req = this.s3.putObject(params, (err: any, data: any) => {
+    rq.req = this.s3(blob).putObject(params, (err: any, data: any) => {
         if (err)
           rq.err = err;
         else
@@ -482,7 +509,7 @@ export class StorageManager extends Storage.StorageManager
     let rq = new S3Request(blob);
     this.delBlobIndex[id] = rq;
     blob.setDeleting();
-    rq.req = this.s3.deleteObject(params, (err: any, data: any) => {
+    rq.req = this.s3(blob).deleteObject(params, (err: any, data: any) => {
         if (err)
           rq.err = err;
         else
@@ -519,7 +546,7 @@ export class StorageManager extends Storage.StorageManager
     let rq = new S3Request(blob);
     this.lsBlobIndex[id] = rq;
     blob.setListing();
-    rq.req = this.s3.listObjectsV2(params, (err: any, data: any) => {
+    rq.req = this.s3(blob).listObjectsV2(params, (err: any, data: any) => {
         if (err)
           rq.err = err;
         else
@@ -539,12 +566,12 @@ export class StorageManager extends Storage.StorageManager
 
   createTransferUrl(params: Storage.TransferParams): Storage.FsmTransferUrl
   {
-    params = Util.shallowAssignImmutable(params, { bucket: this.lookupBucket(params.bucket || 'transfers') });
+    params = Util.shallowAssignImmutable(params, { bucket: params.bucket || 'transfers' });
     let fsm = new FsmTransferUrl(this.env, params);
     if (fsm === null)
     {
-      let params: any = { Bucket: fsm.params.bucket, Fields: { key: fsm.params.key } };
-      this.s3.createPresignedPost(params, (err: any, url: string) => {
+      let params: any = { Bucket: this.lookupBucket(fsm.params.bucket), Fields: { key: fsm.params.key } };
+      this.s3OfBucket(params.bucket).createPresignedPost(params, (err: any, url: string) => {
           if (err)
           {
             this.env.log.error(`S3: createPresignedPost failed: ${err}`);
@@ -559,14 +586,14 @@ export class StorageManager extends Storage.StorageManager
     }
     else
     {
-      let s3params: any = { Bucket: fsm.params.bucket, Key: fsm.params.key };
+      let s3params: any = { Bucket: this.lookupBucket(fsm.params.bucket), Key: fsm.params.key };
       if (params.op === 'putObject' && params.contentType)
         s3params['ContentType'] = params.contentType;
       if (params.op === 'putObject' && params.contentEncoding)
         s3params['ContentEncoding'] = params.contentEncoding;
       if (params.op === 'putObject' && params.cacheControl)
         s3params['CacheControl'] = params.cacheControl;
-      this.s3.getSignedUrl(params.op, s3params, (err: any, url: string) => {
+      this.s3OfBucket(params.bucket).getSignedUrl(params.op, s3params, (err: any, url: string) => {
           if (err)
           {
             this.env.log.error(`S3: getSignedUrl failed: ${err}`);
