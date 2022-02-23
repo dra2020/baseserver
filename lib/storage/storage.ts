@@ -85,6 +85,7 @@ export interface BlobProperties
   ContentLanguage?: string;
   LastModified?: string;
   ETag?: string;
+  CacheControl?: string;
 }
 
 export interface MultiBufferList
@@ -447,6 +448,17 @@ export class StorageBlob
 
         if (this.params.loadToFilter)
           this.params.loadTo = this.params.loadToFilter(this, this.params.loadTo);
+
+        // Make props available in blob
+        let props = br.asProps();
+        if (props.length == 1)
+        {
+          let p = props[0];
+          if (! p.Key)
+            p.Key = this.params.id;
+          this._keys.push(p.Key);
+          this._props.push(p);
+        }
       }
 
       // load filter might have marked fsmLoad done (or marked load state failed)

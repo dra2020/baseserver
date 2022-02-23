@@ -103,7 +103,12 @@ class S3Request implements Storage.BlobRequest
     props.Key = data.Key;
     props.ETag = data.ETag;
     props.LastModified = data.LastModified;
-    props.ContentEncoding = data.ContentEncoding;
+    if (data.ContentEncoding)
+      props.ContentEncoding = data.ContentEncoding;
+    if (data.CacheControl)
+      props.CacheControl = data.CacheControl;
+    if (data.ContentType)
+      props.ContentType = data.ContentType;
     return props;
   }
 
@@ -270,9 +275,10 @@ export class StorageManager extends Storage.StorageManager
     }
 
     this.s3map[''] = new S3({apiVersion: '2006-03-01', region: 'us-west-2'});
+    this.s3map['aws'] = this.s3map[''];
     if (this.env.context.xstring('b2_application_key_id') !== undefined
         && this.env.context.xstring('b2_application_key') !== undefined)
-      this.s3map['bb'] = new S3({
+      this.s3map['b2'] = new S3({
                           apiVersion: '2006-03-01',
                           endpoint: 's3.us-west-004.backblazeb2.com',
                           accessKeyId: this.env.context.xstring('b2_application_key_id'),
