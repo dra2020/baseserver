@@ -121,7 +121,7 @@ class S3Request implements Storage.BlobRequest
       for (let i: number = 0; i < this.data.Contents.length; i++)
         a.push(this._dataToProps(this.data.Contents[i]));
     }
-    else
+    else if (this.data)
       a.push(this._dataToProps(this.data));
 
     return a;
