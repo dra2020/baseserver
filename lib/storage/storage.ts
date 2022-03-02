@@ -44,7 +44,7 @@ export interface TransferParams
 }
 
 // Where does the source data for save come from?
-export type DispositionType = 'object' | 'string' | 'buffer' | 'stream' | 'filepath';
+export type DispositionType = 'object' | 'string' | 'buffer' | 'compressedbuffer' | 'stream' | 'filepath';
 export type LoadToFilter = (blob: StorageBlob, a: any) => any;
 
 export interface BlobParams
@@ -423,7 +423,8 @@ export class StorageBlob
             // No work here, processing happened in stream handlers
             break;
           case 'buffer':
-            this.params.loadTo = br.asBuffer(); // automatically uncompressed if necessary
+          case 'compressedbuffer':
+            this.params.loadTo = br.asBuffer(); // automatically uncompressed if necessary for 'buffer' type
             break;
           case 'string':
             this.params.loadTo = br.asString(); // automatically uncompressed if necessary

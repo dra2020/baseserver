@@ -63,7 +63,11 @@ class S3Request implements Storage.BlobRequest
 
   decode(): void
   {
-    if (this.err == null && this.data && this.data.Body && this.data.ContentEncoding === 'gzip')
+    if (this.err == null
+        && this.data
+        && this.data.Body
+        && this.data.ContentEncoding === 'gzip'
+        && this.blob.params.loadToType !== 'compressedbuffer')
     {
       try
       {
@@ -462,6 +466,7 @@ export class StorageManager extends Storage.StorageManager
         body = Buffer.from(blob.params.saveFrom);
         break;
       case 'buffer':
+      case 'compressedbuffer':
         body = blob.params.saveFrom;
         break;
       case 'stream':
@@ -474,7 +479,7 @@ export class StorageManager extends Storage.StorageManager
         if (body == null) return;
         break;
     }
-    if (blob.params.ContentEncoding === 'gzip' && Buffer.isBuffer(body))
+    if (blob.params.ContentEncoding === 'gzip' && Buffer.isBuffer(body) && blob.params.saveFromType !== 'compressedbuffer')
       body =  zlib.gzipSync(body);
 
     params.Body = body;
