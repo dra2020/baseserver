@@ -27,7 +27,7 @@ const FSM_LOADING = UniqueState++;
 const FSM_DELETING = UniqueState++;
 const FSM_FILTERING = UniqueState++;
 
-const reLog = /^Log_([^_]*)_(\d{4}-\d{2}-\d{2}T\d{2}:)\d{2}:\d{2}.\d{3}Z_(\d+)_[^\.]+.csv$/;
+const reLog = /^Log_([^_]*)_(\d{4}-\d{2}-\d{2}T\d{2}:)(\d{2}:\d{2}.\d{3}Z)_(\d+)_[^\.]+.csv$/;
 const reLine = /^(.),(\d+),(.*)$/;
 
 // The compaction process involves:
@@ -46,15 +46,18 @@ function logToKey(env: Environment, log: string): string
 {
   // Log is of form:
   //  {Log,Agg}_{Prod,Dev}_YYYY-MM-DDTHH:MM:SS.UUUZ_{count}_{guid}.{csv,json}
-  // We are only concerned with Log_{Prod|Dev}_{datetime}_0_*.csv
-  // That is, we just want the small single instance log files.
-  // The key includes Log_Prod_YYYY-MM-DDTHH:
   
   let prod = env.context.xflag('production') ? 'Prod' : 'Dev';
   let a = reLog.exec(log);
-  if (a && a.length == 4 && a[3] == '0' && a[1] === prod)
+  if (a && a.length == 5 && a[1] === prod)
     return `Log_${a[1]}_${a[2]}`;
   return null;
+}
+
+function specialZeroLog(log: string): boolean
+{
+  let a = reLog.exec(log);
+  return !!a && a.length == 5 && a[3] == '00:00.000Z';
 }
 
 export class FsmCompact extends FSM.Fsm
@@ -113,7 +116,7 @@ export class FsmCompact extends FSM.Fsm
         case FSM_FILTERING:
           Object.keys(this.clusters).forEach((key: string) => {
               let cluster = this.clusters[key];
-              if (cluster.length < 10)
+              if (cluster.length == 1 && specialZeroLog(cluster[0]))
                 delete this.clusters[key];
             });
           this.env.log.chatter(`logconcat: compacting ${Util.countKeys(this.clusters)} log clusters`);
