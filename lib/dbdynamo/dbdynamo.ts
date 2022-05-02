@@ -534,6 +534,8 @@ class FsmExecuteCreate extends FSM.Fsm
   }
 }
 
+const DefaultCollectionOptions = { prefix: 'dra' };
+
 export class DynamoCollection extends DB.DBCollection
 {
   attributeIndex: any;
@@ -542,9 +544,9 @@ export class DynamoCollection extends DB.DBCollection
 
   constructor(env: Environment, client: DynamoClient, name: string, options: any)
   {
-    super(env, client, name, options);
+    super(env, client, name, Util.shallowAssignImmutable(DefaultCollectionOptions, options));
     this.waitOn(client);
-    this.col = { TableName: `dra-${client.DBName}-${name}` };
+    this.col = { TableName: `${this.options.prefix}-${client.DBName}-${name}` };
     this.constructIndex();
   }
 

@@ -1,3 +1,6 @@
+/*
+IN PROGRESS
+
 import { Util, FSM } from '@dra2020/baseclient';
 
 import * as DBAbstract from '../dbabstract/all';
@@ -6,13 +9,26 @@ import * as DBAbstract from '../dbabstract/all';
 // The DBMRU class really addresses three issues:
 //  1. In-memory caching of items to improve latency and reduce database load.
 //  2. Serialization of reads (find) and writes (update, unset, del).
-//  3. Maintain a "source of truth" for the state of some item.
+//  3. Maintain a "source of truth" for the state of some item so all code references most current value.
 //
-// Basic mechanism:
-//  Simple finds if nothing else is extent will just return current data value.
-//  Otherwise find executes a lookup.
-//  Simple updates will execute the update, but will wait until other updates complete first.
-//  A find with updates in process will wait for all updates to complete and then return the result.
+// Basic idea:
+//  We assume that in the case where a single instance wants a serialized view (that is, if they
+//  do an update and then a read, the read will show the results of the update) then they serialize
+//  externally - this layer does not have to serialize the two requests explicitly.
+//
+//  So the interesting states are:
+//    1. We have a find request outstanding.
+//    2. We have some kind of update outstanding.
+//    3. We have no request outstanding.
+//
+//  If we have a find request outstanding, we delay any updates until the find completes. Any new find just piggy packs
+//  on the outstanding find.
+//  If we have an update outstanding, the find request will resolve when the first update completes (because updates
+//  return the entire new record).
+//  If we have an update outstanding when a new update comes in, it gets queued until the first update finishes.
+//  Updates then proceed in fifo order.
+//  A find will resolve immediately if there is nothing outstanding (and something in the MRU of course).
+//
 
 const FSM_PAUSED = FSM.FSM_CUSTOM1;
 
@@ -28,19 +44,23 @@ const DefaultOptions: Options = { latency: 1000 * 60, limit: 2000 };
 
 export class Item extends FSM.Fsm
 {
+  mru: DBMRU;
+  length: number;
   result: any,
   msExpires: number,
-  mru: DBMRU;
   writes: FSM.Fsm[];
   find: DBAbstract.DBFind;
 
-  constructor(mru: DBMRU)
+  constructor(mru: DBMRU, iid: string)
   {
     super(mru.options.env);
     this.mru = mru;
     this.writes = [];
     this.resetExpire();
+    this.result = { id: iid }; // We maintain this object shell so clients can hold on to shell and keep current
   }
+
+  get iid(): string { return this.result.id }
 
   resetExpire(): void
   {
@@ -61,6 +81,19 @@ export class DBMRU
     this._blocked = {};
     this._nBlocked = 0;
     this.mru = {};
+  }
+
+  block(iid: string): void
+  {
+    // "blocked" is just an optimization to speed up lookups that we know will fail. So we can safely blow away if gets too big.
+    if (this._nBlocked > 50000)
+    {
+      this._blocked = {};
+      this._nBlocked = 0;
+    }
+    this._blocked[iid] = true;
+    this._nBlocked++;
+    delete this.mru[iid];
   }
 
   remove(id: string): void
@@ -90,4 +123,5 @@ export class DBMRU
       delete this.mru[items[i].id];
   }
 
-}
+length
+*/
