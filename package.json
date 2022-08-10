@@ -1,6 +1,6 @@
 {
   "name": "@dra2020/baseserver",
-  "version": "1.0.41",
+  "version": "1.0.43",
   "description": "Utility functions for NodeJS-based Javascript projects.",
   "main": "dist/baseserver.js",
   "types": "./dist/all/all.d.ts",
@@ -44,7 +44,7 @@
     "@dra2020/topojson-client": "^3.2.7",
     "@dra2020/topojson-server": "^3.0.103",
     "@dra2020/topojson-simplify": "^3.0.102",
-    "aws-sdk": "^2.1045.0",
+    "aws-sdk": "^2.1192.0",
     "diff-match-patch": "^1.0.5",
     "geojson": "^0.5.0",
     "object-hash": "^2.2.0",
