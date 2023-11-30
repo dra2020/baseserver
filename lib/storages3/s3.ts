@@ -4,7 +4,7 @@ import * as stream from 'stream';
 import * as zlib from 'zlib';
 
 // Public libraries
-import * as S3 from 'aws-sdk/clients/s3';
+import { S3 } from '@aws-sdk/client-s3';
 
 // Shared libraries
 import { Context, LogAbstract, Util, FSM } from '@dra2020/baseclient';
@@ -285,8 +285,10 @@ export class StorageManager extends Storage.StorageManager
       this.s3map['b2'] = new S3({
                           apiVersion: '2006-03-01',
                           endpoint: 's3.us-west-004.backblazeb2.com',
-                          accessKeyId: this.env.context.xstring('b2_application_key_id'),
-                          secretAccessKey: this.env.context.xstring('b2_application_key'),
+                          credentials: {
+                            accessKeyId: this.env.context.xstring('b2_application_key_id'),
+                            secretAccessKey: this.env.context.xstring('b2_application_key'),
+                            },
                         });
     this.count = 0;
   }

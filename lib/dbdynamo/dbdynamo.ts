@@ -4,8 +4,8 @@ import * as stream from 'stream';
 import * as zlib from 'zlib';
 
 // Public dynamodb API
-import * as DynamoDB from 'aws-sdk/clients/dynamodb';
-import * as DynamoDBStreams from 'aws-sdk/clients/dynamodbstreams';
+import { DynamoDB } from '@aws-sdk/client-dynamodb';
+import { DynamoDBStreams } from '@aws-sdk/client-dynamodb-streams';
 
 // Shared libraries
 import { Util, LogAbstract, Context, FSM } from '@dra2020/baseclient';

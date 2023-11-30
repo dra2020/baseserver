@@ -14,7 +14,7 @@ var libConfig = {
       library: './lib/all/all.ts'
 	  },
     target: 'node',
-    mode: 'production',
+    mode: 'development',
     output: {
         library: 'baseserver',
         libraryTarget: 'umd',
