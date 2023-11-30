@@ -981,7 +981,7 @@ export interface ILogAccumulator
 }
 
 const specialEventKey: IKeyIndex = {
-    'Listening on port 8081': true,
+    'Listening on port 8080': true,
     'API create  ended': true,
     'createuser': true,
     'create visitor': true,
@@ -991,7 +991,7 @@ const specialEventKey: IKeyIndex = {
   };
 
 const specialEventNames: any = {
-    'Listening on port 8081': 'restarts',
+    'Listening on port 8080': 'restarts',
     'API create  ended': 'newmaps',
     'createuser': 'newuser',
     'create visitor': 'newvisitor',
