@@ -527,12 +527,11 @@ export class StorageBlob
 
   toLoadStream(): stream.Readable
     {
-      return this.params.loadToType === 'stream' ? this.params.loadTo as stream.Readable : null;
+      return this.params.loadTo as stream.Readable;
     }
 
   setLoadStream(rs: stream.Readable): void
     {
-      this.params.loadToType = 'stream';
       this.params.loadTo = rs;
     }
 }
