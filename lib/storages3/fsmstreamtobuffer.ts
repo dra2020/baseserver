@@ -30,21 +30,21 @@ export class FsmStreamToBuffer extends FSM.Fsm
   {
     if (s)
     {
-      console.log(`FsmStreamToBuffer: starting, unzip: ${unzip}`);
+      //console.log(`FsmStreamToBuffer: starting, unzip: ${unzip}`);
       let zs = unzip ? zlib.createGunzip({}) : null;
       let t = unzip ? zs : s;
       t.on('data', (chunk: Buffer) => {
           this._bufs.push(chunk);
-          console.log(`FsmStreamToBuffer: reading chunk of size ${chunk.length}`);
+          //console.log(`FsmStreamToBuffer: reading chunk of size ${chunk.length}`);
         });
       t.on('end', () => {
           this._buf = Buffer.concat(this._bufs);
-          console.log(`FsmStreamToBuffer: finished reading buffer of length ${this._buf.length}`);
+          //console.log(`FsmStreamToBuffer: finished reading buffer of length ${this._buf.length}`);
           delete this._bufs;
           this.setState(FSM.FSM_DONE);
         });
       t.on('error', (err: any) => {
-          console.log(`FsmStreamToBuffer: error reading zipped buffer`);
+          //console.log(`FsmStreamToBuffer: error reading zipped buffer`);
           this.err = { statusCode: 999, message: 'Content not in gzip format.' };
           this.setState(FSM.FSM_ERROR);
         });
@@ -52,7 +52,7 @@ export class FsmStreamToBuffer extends FSM.Fsm
         s.pipe(zs);
       else
         s.on('error', (err: any) => {
-            console.log(`FsmStreamToBuffer: error reading buffer`);
+            //console.log(`FsmStreamToBuffer: error reading buffer`);
             this.err = { statusCode: 999, message: 'Stream read error.' };
             this.setState(FSM.FSM_ERROR);
           });
@@ -87,17 +87,17 @@ export class FsmStreamToStream extends FSM.Fsm
   {
     if (s)
     {
-      console.log(`FsmStreamToStream: starting, unzip: ${unzip}`);
+      //console.log(`FsmStreamToStream: starting, unzip: ${unzip}`);
       if (unzip)
       {
         let t = zlib.createGunzip({});
         t.on('end', () => {
-            console.log(`FsmStreamToStream: finishing zipped stream`);
+            //console.log(`FsmStreamToStream: finishing zipped stream`);
             this.passThrough._done();
             this.setState(FSM.FSM_DONE);
           });
         t.on('error', () => {
-            console.log(`FsmStreamToStream: error on zipped stream`);
+            //console.log(`FsmStreamToStream: error on zipped stream`);
             this.passThrough._done();
             this.err = { statusCode: 999, message: 'Content not in gzip format.' };
             this.setState(FSM.FSM_ERROR);
@@ -107,12 +107,12 @@ export class FsmStreamToStream extends FSM.Fsm
       else
       {
         s.on('end', () => {
-            console.log(`FsmStreamToStream: finishing non-zipped stream`);
+            //console.log(`FsmStreamToStream: finishing non-zipped stream`);
             this.passThrough._done();
             this.setState(FSM.FSM_DONE);
           });
         s.on('error', () => {
-            console.log(`FsmStreamToStream: error on non-zipped stream`);
+            //console.log(`FsmStreamToStream: error on non-zipped stream`);
             this.passThrough._done();
             this.err = { statusCode: 999, message: 'Stream read error.' };
             this.setState(FSM.FSM_ERROR);
