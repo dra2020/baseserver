@@ -21,7 +21,7 @@ class FsmList extends FSM.Fsm
     {
       this.setState(FSM.FSM_PENDING);
       this.env.lambdaManager.awslambda.listFunctions({}, (err: any, data: any) => {
-          console.log('20: AWS testing: lambda.listFunctions called');
+          //console.log('20: AWS testing: lambda.listFunctions called');
           if (err)
           {
             this.env.log.chatter(`listFunctions: failed: ${JSON.stringify(err)}`);
@@ -76,7 +76,7 @@ export class FsmInvoke extends FSM.Fsm
         Payload: JSON.stringify(this.params)
         };
       this.env.lambdaManager.awslambda.invoke(awsparam, (err: any, data: any) => {
-          console.log('21: AWS testing: lambda.invoke called');
+          //console.log('21: AWS testing: lambda.invoke called');
           let payload: any = data && data.Payload ? data.Payload : null;
           try
           {

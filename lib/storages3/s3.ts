@@ -288,7 +288,7 @@ export class FsmStreamLoaderV3 extends FSM.Fsm
 
         case FSM.FSM_STARTING:
           this.sm.s3(this.blob).getObject(this.param, (err: any, data: any) => {
-              console.log(`6: AWS testing: S3.getObject called`);
+              //console.log(`6: AWS testing: S3.getObject called`);
               if (err == null)
               {
                 this.data = data;
@@ -342,8 +342,8 @@ export class FsmTransferUrl extends Storage.FsmTransferUrl
     let command = this.params.op === 'putObject' ? new PutObjectCommand(s3params) : new GetObjectCommand(s3params);
     getSignedUrl(client, command)
       .then((url: string) => {
-          console.log(`5: AWS testing: S3.getSignedUrl called`);
-          console.log(`getSignedUrl: ${this.params.op}: succeeded: ${url}`);
+          //console.log(`5: AWS testing: S3.getSignedUrl called`);
+          //console.log(`getSignedUrl: ${this.params.op}: succeeded: ${url}`);
           this.url = url;
           this.setState(FSM.FSM_DONE);
         })
@@ -478,7 +478,7 @@ export class StorageManager extends Storage.StorageManager
     this.headBlobIndex[id] = rq;
     blob.setLoading();
     rq.req = this.s3(blob).headObject(params, (err: any, data: any) => {
-        console.log(`4: AWS testing: S3headObject called`);
+        //console.log(`4: AWS testing: S3headObject called`);
         rq.res = this;
         if (err)
           rq.err = err;
@@ -573,7 +573,7 @@ export class StorageManager extends Storage.StorageManager
 
     params.Body = body;
     rq.req = this.s3(blob).putObject(params, (err: any, data: any) => {
-        console.log(`3: AWS testing: S3.putObject called`);
+        //console.log(`3: AWS testing: S3.putObject called`);
         if (err)
           rq.err = err;
         else
@@ -611,7 +611,7 @@ export class StorageManager extends Storage.StorageManager
     this.delBlobIndex[id] = rq;
     blob.setDeleting();
     rq.req = this.s3(blob).deleteObject(params, (err: any, data: any) => {
-        console.log(`2: AWS testing: S3.deleteObject called`);
+        //console.log(`2: AWS testing: S3.deleteObject called`);
         if (err)
           rq.err = err;
         else
@@ -649,7 +649,7 @@ export class StorageManager extends Storage.StorageManager
     this.lsBlobIndex[id] = rq;
     blob.setListing();
     rq.req = this.s3(blob).listObjectsV2(params, (err: any, data: any) => {
-        console.log(`1: AWS testing: S3.listObjectsV2 called`);
+        //console.log(`1: AWS testing: S3.listObjectsV2 called`);
         if (err)
           rq.err = err;
         else
