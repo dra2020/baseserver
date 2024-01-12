@@ -94,7 +94,7 @@ class SQSRequest
       });
 
     this.request.setHeader('Content-Type', 'application/json; charset=UTF-8');
-    this.jsonwrite = new JS.JSONStreamWriter({ outBufferSize: 1000000 });
+    this.jsonwrite = new JS.JSONStreamWriter({ outBufferSize: 20000 });
     this.jsonwrite.on('error', (err: any) => {
         console.log(`memsqs:client: encountered request error writing response ${JSON.stringify(err)}`);
         this.onRequestError(err);
