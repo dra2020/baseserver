@@ -786,7 +786,12 @@ export class JSONStreamWriter extends Events.EventEmitter
         bContinue = this.drainChunk();
 
       if (b.length > this._options.outBufferSize)
-        throw 'Internal error: atom larger than buffer size';
+      {
+        console.log(`JSONWriter error writing string of length ${s.length} at:`);
+        let e = new Error();
+        console.log(e.stack);
+        throw 'Internal error in JSONStreamWriter: string larger than buffer size';
+      }
 
       b.copy(this._chunk, this._chunkLen);
       this._chunkLen += b.length;
