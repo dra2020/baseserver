@@ -262,7 +262,7 @@ export class FsmStreamLoaderV3 extends FSM.Fsm
     this.sm = sm;
     this.blob = blob;
     this.param = { Bucket: sm.blobBucket(blob), Key: blob.params.id };
-    if (blob.params.loadToType === 'stream')
+    if (blob.params.loadToType === 'stream' || blob.params.loadToType === 'compressedstream')
     {
       this.fsmStreamToStream = new FsmStreamToStream(env);
       this.blob.setLoadStream(this.fsmStreamToStream.stream);
@@ -292,7 +292,9 @@ export class FsmStreamLoaderV3 extends FSM.Fsm
               if (err == null)
               {
                 this.data = data;
-                let unzip = data?.ContentEncoding === 'gzip' && this.blob.params.loadToType !== 'compressedbuffer';
+                let unzip = data?.ContentEncoding === 'gzip'
+                              && this.blob.params.loadToType !== 'compressedbuffer'
+                              && this.blob.params.loadToType !== 'compressedstream';
                 if (this.fsmStreamToBuffer)
                 {
                   this.fsmStreamToBuffer.setStream(data?.Body, unzip);
@@ -559,6 +561,7 @@ export class StorageManager extends Storage.StorageManager
         body = blob.params.saveFrom;
         break;
       case 'stream':
+      case 'compressedstream':
         body = blob.params.saveFrom;
         bodyStream = body as stream.Readable;
         break;
