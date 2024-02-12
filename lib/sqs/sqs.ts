@@ -143,8 +143,9 @@ export class FsmSendSQS extends FsmSend
             this.trace = new LogAbstract.AsyncTimer(this.env.log, 'sqs: blobsave');
             let blob = SQSBlob.createForSave(this.env, this.dataString);
             this.waitOn(blob.fsmSave);
+            let nBytes = this.dataString.length;
             this.dataString = JSON.stringify(blob.params.id);
-            this.env.log.chatter(`sqs: queuing large message (${this.dataString.length} bytes) using blob indirect to ${blob.params.id}`);
+            this.env.log.chatter(`sqs: queuing large message (${nBytes} bytes) using blob indirect to ${blob.params.id}`);
             break;
           }
           // fall through on small messages
