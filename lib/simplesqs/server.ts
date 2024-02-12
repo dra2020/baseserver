@@ -15,7 +15,8 @@ export class SimpleSQSServer
   longpoll: LongPoll;
   queues: Q.Queues;
   nReq: number;
-  nFail: number;
+  nFailReq: number;
+  nFailRes: number;
 
   constructor(port: number = Q.DefaultPort)
   {
@@ -23,7 +24,8 @@ export class SimpleSQSServer
     this.longpoll = new LongPoll();
     this.port = port;
     this.nReq = 0;
-    this.nFail = 0;
+    this.nFailReq = 0;
+    this.nFailRes = 0;
 
     this.server = http.createServer();
     this.server.keepAliveTimeout = 61 * 1000; // Don't interfere with longpoll timeout
@@ -50,7 +52,7 @@ export class SimpleSQSServer
     }
     catch (err)
     {
-      console.log(`memsqs: server: unexpected exception on listen: ${JSON.stringify(err)}`);
+      console.log(`simplesqs: server: unexpected exception on listen: ${JSON.stringify(err)}`);
       this.server = null;
     }
 
@@ -71,7 +73,7 @@ export class SimpleSQSServer
 
   report(): void
   {
-    console.log(`simplesqs: ${this.nReq} requests processed; ${this.nFail} errors`);
+    console.log(`simplesqs: ${this.nReq} requests processed; ${this.nFailReq} request errors, ${this.nFailRes} response errors`);
     this.queues.report();
   }
 }
@@ -92,14 +94,25 @@ class OneRequest
     this.res = res;
     this.bufs = [];
     this.body = { statuscode: 0, result: null };
-    this.req.on('end', () => { this.onDone() });
-    this.req.on('close', () => { this.onDone() });
-    this.req.on('error', () => { this.onError('read string') });
-    this.req.on('data', (b: Buffer) => { this.bufs.push(b) });
-    this.res.on('error', (err: any) => {
-        this.res = null;
-        this.onError(`simplesqs: error writing response: ${err}`);
-      });
+    if (res.statusCode !== 200)
+    {
+      // Non-JSON error - don't try to parse
+      this.res = null;
+      this.server.nFailReq++;
+      this.onError(`statusCode ${res.statusCode} on request; ignoring`);
+    }
+    else
+    {
+      this.req.on('end', () => { this.onDone() });
+      this.req.on('close', () => { this.onDone() });
+      this.req.on('error', () => { this.server.nFailReq++; this.res = null; this.onError('reading request') });
+      this.req.on('data', (b: Buffer) => { this.bufs.push(b) });
+      this.res.on('error', (err: any) => {
+          this.res = null;
+          this.server.nFailRes++;
+          this.onError(`writing response`);
+        });
+    }
   }
 
   isDone(): boolean
@@ -146,14 +159,17 @@ class OneRequest
             }
           }
           else
-            this.onError(`simplesqs: error reading response`);
+          {
+            this.server.nFailReq++;
+            this.onError(`invalid request format`);
+          }
         }
         this.onFinish();
       }
       catch (err)
       {
-        console.log(`simplesqs: server: unexpected exception in onDone: ${JSON.stringify(err)}`);
-        this.onError((err && err.message) ? err.message : err);
+        this.server.nFailReq++;
+        this.onError('parsing request: not valid JSON');
       }
     }
   }
@@ -161,7 +177,6 @@ class OneRequest
   onError(s: string): void
   {
     console.log(`simplesqs error: ${s}`);
-    this.server.nFail++;
     this.body.statuscode = 1;
     this.body.error = 'failure';
     this.onFinish();
