@@ -4,25 +4,12 @@ import * as AWS from 'aws-sdk';
 import { Util, FSM, Context, LogAbstract } from '@dra2020/baseclient';
 import * as Storage from '../storage/all';
 
-interface Environment
-{
-  context: Context.IContext,
-  log: LogAbstract.ILog,
-  fsmManager: FSM.FsmManager,
-  storageManager: Storage.StorageManager,
-  sqsManager: SQSManager,
-}
-
-export interface SQSOptions
-{
-  queueName: string,
-  delaySeconds?: number,
-  maximumMessageSize?: number,
-  messageRetentionPeriod?: number,
-  receiveMessageWaitTimeSeconds?: number,
-  visibilityTimeout?: number,
-  autoDelete?: boolean,
-}
+import { Environment } from './env';
+import { SQSBlob } from './sqsblob';
+import { SQSMessage } from './sqsmessage';
+import { FsmSend, FsmReceive, FsmDelete } from './sqsfsm';
+import { SQSManagerBase } from './sqsmanager';
+import { SQSOptions } from './sqsoptions';
 
 const DefaultSQSOptions = {
   queueName: '',
@@ -34,14 +21,6 @@ const DefaultSQSOptions = {
   autoDelete: true,
 };
 
-export interface SQSMessage
-{
-  groupId: string,
-  data: any,
-  messageId?: string,     // Only on receive
-  receiptHandle?: string, // Only on receive
-}
-
 let UniqueState = FSM.FSM_CUSTOM1;
 const FSM_CREATING = UniqueState++;
 const FSM_SAVING = UniqueState++;
@@ -49,55 +28,18 @@ const FSM_LOADING = UniqueState++;
 const FSM_DELETING = UniqueState++;
 const FSM_SENDING = UniqueState++;
 
-class SQSBlob extends Storage.StorageBlob
-{
-  constructor(env: Environment, params: Storage.BlobParams)
-  {
-    if (params.bucket == null)
-      params.bucket = env.context.xflag('production') ? 'transfers' : 'transfers-dev';
-    params.deleteAfterLoad = true;
-    super(env, params);
-  }
-
-  get data(): string { return this.params.loadTo as string }
-
-  static createForLoad(env: Environment, id: string): SQSBlob
-  {
-    let params: Storage.BlobParams = {
-      id,
-      loadToType: 'string',
-      };
-    let blob = new SQSBlob(env, params);
-    blob.startLoad(env.storageManager);
-    return blob;
-  }
-
-  static createForSave(env: Environment, data: string): SQSBlob
-  {
-    let params: Storage.BlobParams = {
-        id: Util.createGuid(),
-        saveFromType: 'string',
-        saveFrom: data,
-        ContentEncoding: 'gzip',
-        ContentType: 'text/plain; charset=UTF-8',
-      };
-    let blob = new SQSBlob(env, params);
-    blob.setDirty();
-    blob.checkSave(env.storageManager);
-    return blob;
-  }
-}
-
 class FsmQueue extends FSM.Fsm
 {
+  sqsManager: SQSManager;
   tailQueue: Map<string, FsmSend>;
   options: SQSOptions;
   url: string;
   err: any;
 
-  constructor(env: Environment, options: SQSOptions)
+  constructor(env: Environment, sqsManager: SQSManager, options: SQSOptions)
   {
     super(env);
+    this.sqsManager = sqsManager;
     this.tailQueue = new Map<string, FsmSend>();
     this.options = Util.shallowAssignImmutable(DefaultSQSOptions, options);
   }
@@ -120,13 +62,13 @@ class FsmQueue extends FSM.Fsm
       {
         case FSM.FSM_STARTING:
           let gparams: any = {
-              QueueName: this.env.sqsManager.toQueueName(this.options.queueName),
+              QueueName: this.sqsManager.toQueueName(this.options.queueName),
             };
-          this.env.sqsManager.sqs.getQueueUrl(gparams, (err: any, data: any) => {
+          this.sqsManager.sqs.getQueueUrl(gparams, (err: any, data: any) => {
               if (err && err.code !== 'AWS.SimpleQueueService.NonExistentQueue')
               {
                 this.err = err;
-                this.env.sqsManager.reportError('getQueueUrl', err);
+                this.sqsManager.reportError('getQueueUrl', err);
                 this.setState(FSM.FSM_ERROR);
               }
               else if (data?.QueueUrl)
@@ -150,14 +92,14 @@ class FsmQueue extends FSM.Fsm
             FifoThroughputLimit: 'perMessageGroupId',
             };
           let params: any = {
-            QueueName: this.env.sqsManager.toQueueName(this.options.queueName),
+            QueueName: this.sqsManager.toQueueName(this.options.queueName),
             Attributes: attributes,
             };
-          this.env.sqsManager.sqs.createQueue(params, (err: any, data: any) => {
+          this.sqsManager.sqs.createQueue(params, (err: any, data: any) => {
               if (err)
               {
                 this.err = err;
-                this.env.sqsManager.reportError('createQueue', err);
+                this.sqsManager.reportError('createQueue', err);
                 this.setState(FSM.FSM_ERROR);
               }
               else
@@ -169,25 +111,21 @@ class FsmQueue extends FSM.Fsm
   }
 }
 
-export class FsmSend extends FSM.Fsm
+export class FsmSendSQS extends FsmSend
 {
   q: FsmQueue;
-  m: SQSMessage;
   err: any;
   dataString: string;
   trace: LogAbstract.AsyncTimer;
 
   constructor(env: Environment, q: FsmQueue, m: SQSMessage)
   {
-    super(env);
+    super(env, m);
     this.q = q;
-    this.m = m;
     this.waitOn(this.q);                          // Ensure queue initialized
     this.waitOn(this.q.tailQueue.get(m.groupId)); // Ensure ordering
     this.q.tailQueue.set(m.groupId, this);
   }
-
-  get env(): Environment { return this._env as Environment }
 
   tick(): void
   {
@@ -221,14 +159,14 @@ export class FsmSend extends FSM.Fsm
               MessageDeduplicationId: Util.createGuid(),
             };
           let trace = new LogAbstract.AsyncTimer(this.env.log, `sqs: send`);
-          this.env.sqsManager.sqs.sendMessage(params, (err: any, data: any) => {
+          this.q.sqsManager.sqs.sendMessage(params, (err: any, data: any) => {
               trace.log();
               if (this.q.tailQueue.get(this.m.groupId) === this)
                 this.q.tailQueue.delete(this.m.groupId);
               if (err)
               {
                 this.err = err;
-                this.env.sqsManager.reportError('sendMessage', err);
+                this.q.sqsManager.reportError('sendMessage', err);
                 this.setState(FSM.FSM_ERROR);
               }
               else
@@ -244,23 +182,19 @@ export class FsmSend extends FSM.Fsm
   }
 }
 
-export class FsmReceive extends FSM.Fsm
+export class FsmReceiveSQS extends FsmReceive
 {
   err: any;
   q: FsmQueue;
-  results: SQSMessage[];
   blobs: SQSBlob[];
   trace: LogAbstract.AsyncTimer;
 
   constructor(env: Environment, q: FsmQueue)
   {
-    super(env);
-    this.results = [];
+    super(env, q.url);
     this.q = q;
     this.waitOn(q);
   }
-
-  get env(): Environment { return this._env as Environment }
 
   tick(): void
   {
@@ -276,12 +210,12 @@ export class FsmReceive extends FSM.Fsm
               MaxNumberOfMessages: '10',
             };
           let trace = new LogAbstract.AsyncTimer(this.env.log, `sqs: receive`);
-          this.env.sqsManager.sqs.receiveMessage(params, (err: any, data: any) => {
+          this.q.sqsManager.sqs.receiveMessage(params, (err: any, data: any) => {
               trace.log();
               if (err)
               {
                 this.err = err;
-                this.env.sqsManager.reportError('sendMessage', err);
+                this.q.sqsManager.reportError('sendMessage', err);
                 this.setState(FSM.FSM_ERROR);
               }
               else
@@ -344,7 +278,7 @@ export class FsmReceive extends FSM.Fsm
           if (this.q.options.autoDelete)
           {
             this.results.forEach((m: SQSMessage) => {
-                this.waitOn(this.env.sqsManager.delete(this.q.options.queueName, m));
+                this.waitOn(this.q.sqsManager.delete(this.q.options.queueName, m));
               });
           }
           this.setState(FSM_DELETING);
@@ -358,21 +292,17 @@ export class FsmReceive extends FSM.Fsm
   }
 }
 
-export class FsmDelete extends FSM.Fsm
+export class FsmDeleteSQS extends FsmDelete
 {
   q: FsmQueue;
-  m: SQSMessage;
   err: any;
 
   constructor(env: Environment, q: FsmQueue, m: SQSMessage)
   {
-    super(env);
+    super(env, m);
     this.q = q;
-    this.m = m;
     this.waitOn(this.q);
   }
-
-  get env(): Environment { return this._env as Environment }
 
   tick(): void
   {
@@ -388,12 +318,12 @@ export class FsmDelete extends FSM.Fsm
               ReceiptHandle: this.m.receiptHandle,
             };
           let trace = new LogAbstract.AsyncTimer(this.env.log, 'sqs: delete');
-          this.env.sqsManager.sqs.deleteMessage(params, (err: any, data: any) => {
+          this.q.sqsManager.sqs.deleteMessage(params, (err: any, data: any) => {
               trace.log();
               if (err)
               {
                 this.err = err;
-                this.env.sqsManager.reportError('deleteMessage', err);
+                this.q.sqsManager.reportError('deleteMessage', err);
                 this.setState(FSM.FSM_ERROR);
               }
               else
@@ -405,7 +335,7 @@ export class FsmDelete extends FSM.Fsm
   }
 }
 
-export class SQSManager
+export class SQSManager extends SQSManagerBase
 {
 	env: Environment;
   sqs: any;
@@ -413,7 +343,7 @@ export class SQSManager
 
 	constructor(env: Environment)
   {
-    this.env = env;
+    super(env);
 
     if (this.env.context.xstring('aws_access_key_id') === undefined
         || this.env.context.xstring('aws_secret_access_key') === undefined)
@@ -424,7 +354,6 @@ export class SQSManager
 
     this.sqs = new AWS.SQS({apiVersion: '2012-11-05', region: 'us-west-2'});
     this.nameToQueue = new Map<string, FsmQueue>();
-    this.env.sqsManager = this;
   }
 
   toQueueName(n: string): string
@@ -449,7 +378,7 @@ export class SQSManager
     if (! q)
     {
       let options = Util.shallowAssignImmutable(DefaultSQSOptions, { queueName: name });
-      q = new FsmQueue(this.env, options);
+      q = new FsmQueue(this.env, this, options);
       this.nameToQueue.set(name, q);
     }
     return q;
@@ -457,16 +386,16 @@ export class SQSManager
 
   send(name: string, m: SQSMessage): FsmSend
   {
-    return new FsmSend(this.env, this.queueOf(name), m);
+    return new FsmSendSQS(this.env, this.queueOf(name), m);
   }
 
   receive(name: string): FsmReceive
   {
-    return new FsmReceive(this.env, this.queueOf(name));
+    return new FsmReceiveSQS(this.env, this.queueOf(name));
   }
 
   delete(name: string, m: SQSMessage): FsmDelete
   {
-    return new FsmDelete(this.env, this.queueOf(name), m);
+    return new FsmDeleteSQS(this.env, this.queueOf(name), m);
   }
 }

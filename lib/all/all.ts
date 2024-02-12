@@ -21,3 +21,5 @@ import * as Memsqs from '../memsqs/all';
 export { Memsqs };
 import * as SQS from '../sqs/all';
 export { SQS };
+import * as SimpleSQS from '../simplesqs/all';
+export { SimpleSQS };
