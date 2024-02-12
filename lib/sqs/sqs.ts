@@ -11,7 +11,7 @@ import { FsmSend, FsmReceive, FsmDelete } from './sqsfsm';
 import { SQSManagerBase } from './sqsmanager';
 import { SQSOptions } from './sqsoptions';
 
-const DefaultSQSOptions = {
+let DefaultSQSOptions = {
   queueName: '',
   delaySeconds: 0,
   maximumMessageSize: 262144,
@@ -341,9 +341,12 @@ export class SQSManager extends SQSManagerBase
   sqs: any;
   nameToQueue: Map<string, FsmQueue>;
 
-	constructor(env: Environment)
+	constructor(env: Environment, options?: SQSOptions)
   {
     super(env);
+
+    // Establish defaults for queues
+    DefaultSQSOptions = Util.shallowAssignImmutable(DefaultSQSOptions, options);
 
     if (this.env.context.xstring('aws_access_key_id') === undefined
         || this.env.context.xstring('aws_secret_access_key') === undefined)
