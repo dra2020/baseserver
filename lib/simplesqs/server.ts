@@ -159,18 +159,26 @@ class OneRequest
             }
           }
           else
-          {
-            this.server.nFailReq++;
-            this.onError(`invalid request format`);
-          }
+            this.onRequestError();
         }
         this.onFinish();
       }
       catch (err)
       {
-        this.server.nFailReq++;
-        this.onError('parsing request: not valid JSON');
+        this.onRequestError();
       }
+    }
+  }
+
+  onRequestError(): void
+  {
+    if (this.res)
+    {
+      this.server.nFailReq++;
+      this.res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
+      this.body = { statuscode: 1, error: 'invalid request' };
+      this.res.end(JSON.stringify(this.body));
+      this.res = null;
     }
   }
 
