@@ -81,13 +81,14 @@ export class FsmSendSimple extends FsmSend
         case FSM.FSM_STARTING:
           this.setState(FSM_SAVING);
           this.dataString = JSON.stringify(this.m.data);
-          if (this.dataString.length > (this.q.options.maximumMessageSize-1000))
+          let nBytes = this.dataString.length;
+          if (nBytes > (this.q.options.maximumMessageSize-1000))
           {
             this.trace = new LogAbstract.AsyncTimer(this.env.log, 'simplesqs: blobsave');
             let blob = SQSBlob.createForSave(this.env, this.dataString);
             this.waitOn(blob.fsmSave);
             this.dataString = JSON.stringify(blob.params.id);
-            this.env.log.chatter(`simplesqs: queuing large message (${this.dataString.length} bytes) using blob indirect to ${blob.params.id}`);
+            this.env.log.chatter(`simplesqs: queuing large message (${nBytes} bytes) using blob indirect to ${blob.params.id}`);
             break;
           }
           // fall through on small messages

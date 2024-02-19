@@ -1,6 +1,6 @@
 {
   "name": "@dra2020/baseserver",
-  "version": "1.0.56",
+  "version": "1.0.58",
   "description": "Utility functions for NodeJS-based Javascript projects.",
   "main": "dist/baseserver.js",
   "types": "./dist/all/all.d.ts",
