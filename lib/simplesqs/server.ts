@@ -16,6 +16,7 @@ export class SimpleSQSServer
   queues: Q.Queues;
   nReq: number;
   nFailReq: number;
+  nEmptyReq: number;
   nFailRes: number;
 
   constructor(port: number = Q.DefaultPort)
@@ -25,6 +26,7 @@ export class SimpleSQSServer
     this.port = port;
     this.nReq = 0;
     this.nFailReq = 0;
+    this.nEmptyReq = 0;
     this.nFailRes = 0;
 
     this.server = http.createServer();
@@ -73,7 +75,7 @@ export class SimpleSQSServer
 
   report(): void
   {
-    console.log(`simplesqs: ${this.nReq} requests processed; ${this.nFailReq} request errors, ${this.nFailRes} response errors`);
+    console.log(`simplesqs: ${this.nReq} total requests; ${this.nEmptyReq} empty, ${this.nFailReq} errors in request format, ${this.nFailRes} errors during response`);
     this.queues.report();
   }
 }
@@ -134,7 +136,7 @@ class OneRequest
       try
       {
         let buf = Buffer.concat(this.bufs);
-        if (buf)
+        if (buf && buf.length > 0)
         {
           let s = buf.toString('utf8');
           let p = JSON.parse(s) as MessageParams;
@@ -160,8 +162,10 @@ class OneRequest
           }
           else
             this.onRequestError();
+          this.onFinish();
         }
-        this.onFinish();
+        else
+          this.onEmptyRequest();
       }
       catch (err)
       {
@@ -180,6 +184,12 @@ class OneRequest
       this.res.end(JSON.stringify(this.body));
       this.res = null;
     }
+  }
+
+  onEmptyRequest(): void
+  {
+    this.server.nEmptyReq++;
+    this.onFinish();
   }
 
   onError(s: string): void
