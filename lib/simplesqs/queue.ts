@@ -8,6 +8,7 @@ export const DefaultServerUrl: string = `http://localhost:${DefaultPort}`;
 
 const MessageDeadTimeout = 1000 * 30;
 const QueueDeadTimeout = 1000 * 60 * 5;
+const MaxReceiveMessages = 20;
 
 export interface QMessage
 {
@@ -50,8 +51,7 @@ export class Queue
 
   receive(): SQSMessage[]
   {
-    let messages = this.messages;
-    this.messages = [];
+    let messages = this.messages.splice(0, MaxReceiveMessages);
     return messages.map(m => m.message);
   }
 
