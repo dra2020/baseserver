@@ -5,6 +5,7 @@ var fs = require('fs');
 var externals = { 'aws-sdk': 'aws-sdk' };
 fs.readdirSync('node_modules').filter(s => s !== '.bin').forEach(s => { externals[s] = `commonjs ${s}` });
 fs.readdirSync('node_modules/@dra2020').forEach(s => { s = `@dra2020/${s}`; externals[s] = `commonjs ${s}` });
+fs.readdirSync('node_modules/@aws-sdk').forEach(s => { s = `@aws-sdk/${s}`; externals[s] = `${s}` });
 
 // why is tinyqueue special?
 delete externals['tinyqueue'];
