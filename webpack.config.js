@@ -2,10 +2,10 @@ var path = require('path');
 var fs = require('fs');
 
 // Don't package up these - let ultimate client do so
-var externals = { 'aws-sdk': 'aws-sdk' };
+var externals = { };
 fs.readdirSync('node_modules').filter(s => s !== '.bin').forEach(s => { externals[s] = `commonjs ${s}` });
 fs.readdirSync('node_modules/@dra2020').forEach(s => { s = `@dra2020/${s}`; externals[s] = `commonjs ${s}` });
-fs.readdirSync('node_modules/@aws-sdk').forEach(s => { s = `@aws-sdk/${s}`; externals[s] = `${s}` });
+fs.readdirSync('node_modules/@aws-sdk').forEach(s => { s = `@aws-sdk/${s}`; externals[s] = `commonjs ${s}` });
 
 // why is tinyqueue special?
 delete externals['tinyqueue'];
