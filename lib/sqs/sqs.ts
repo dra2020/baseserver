@@ -66,7 +66,7 @@ class FsmQueue extends FSM.Fsm
             };
           this.sqsManager.sqs.getQueueUrl(gparams, (err: any, data: any) => {
               let c = err ? (err.code || err.Code) : null;
-              if (c !== 'AWS.SimpleQueueService.NonExistentQueue')
+              if (err && c !== 'AWS.SimpleQueueService.NonExistentQueue')
               {
                 this.err = err;
                 this.sqsManager.reportError('getQueueUrl', err);
