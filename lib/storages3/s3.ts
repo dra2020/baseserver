@@ -4,20 +4,15 @@ import * as stream from 'stream';
 import * as zlib from 'zlib';
 
 // Public libraries
-import * as S3 from 'aws-sdk/clients/s3';
+import { S3, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 // Shared libraries
 import { Context, LogAbstract, Util, FSM } from '@dra2020/baseclient';
+import { Environment } from './env';
+import { FsmStreamToBuffer, FsmStreamToStream } from './fsmstreamtobuffer';
 
 import * as Storage from '../storage/all';
-
-export interface Environment
-{
-  context: Context.IContext;
-  log: LogAbstract.ILog;
-  fsmManager: FSM.FsmManager;
-  storageManager: Storage.StorageManager;
-}
 
 class S3Request implements Storage.BlobRequest
 {
@@ -26,6 +21,7 @@ class S3Request implements Storage.BlobRequest
   res: any;
   data: any;
   err: any;
+  buffer: Buffer;
 
   constructor(blob: Storage.StorageBlob)
   {
@@ -84,7 +80,7 @@ class S3Request implements Storage.BlobRequest
   {
     if (this.err || this.res == null || this.data == null || this.data.Body == null)
       return undefined;
-    let body: Buffer = this.data.Body;
+    let body: Buffer = this.buffer || this.data.Body;
     return body.toString('utf-8');
   }
 
@@ -93,7 +89,7 @@ class S3Request implements Storage.BlobRequest
   {
     if (this.err || this.res == null || this.data == null || this.data.Body == null)
       return undefined;
-    let body: Buffer = this.data.Body;
+    let body: Buffer = this.buffer || this.data.Body;
     return body;
   }
 
@@ -141,7 +137,7 @@ class S3Request implements Storage.BlobRequest
 
 const ChunkSize = 4000000;
 
-export class FsmStreamLoader extends FSM.Fsm
+export class FsmStreamLoaderV2 extends FSM.Fsm
 {
   sm: StorageManager;
   blob: Storage.StorageBlob;
@@ -250,6 +246,83 @@ export class FsmStreamLoader extends FSM.Fsm
   }
 }
 
+export class FsmStreamLoaderV3 extends FSM.Fsm
+{
+  sm: StorageManager;
+  blob: Storage.StorageBlob;
+  param: any;
+  fsmStreamToBuffer: FsmStreamToBuffer;
+  fsmStreamToStream: FsmStreamToStream;
+  _err: any;
+  data: any;
+
+  constructor(env: Environment, sm: StorageManager, blob: Storage.StorageBlob)
+  {
+    super(env);
+    this.sm = sm;
+    this.blob = blob;
+    this.param = { Bucket: sm.blobBucket(blob), Key: blob.params.id };
+    if (blob.params.loadToType === 'stream' || blob.params.loadToType === 'compressedstream')
+    {
+      this.fsmStreamToStream = new FsmStreamToStream(env);
+      this.blob.setLoadStream(this.fsmStreamToStream.stream);
+    }
+    else
+      this.fsmStreamToBuffer = new FsmStreamToBuffer(env);
+  }
+
+  get env(): Environment { return this._env as Environment; }
+
+  get err(): any { return this._err || (this.fsmStreamToBuffer ? this.fsmStreamToBuffer.err : this.fsmStreamToStream.err) };
+
+  get buffer(): Buffer { return this.fsmStreamToBuffer ? this.fsmStreamToBuffer.buffer : undefined }
+
+  tick(): void
+  {
+    if (this.ready && this.isDependentError)
+      this.setState(FSM.FSM_ERROR);
+    else if (this.ready)
+    {
+      switch (this.state)
+      {
+
+        case FSM.FSM_STARTING:
+          this.sm.s3(this.blob).getObject(this.param, (err: any, data: any) => {
+              //console.log(`6: AWS testing: S3.getObject called`);
+              if (err == null)
+              {
+                this.data = data;
+                let unzip = data?.ContentEncoding === 'gzip'
+                              && this.blob.params.loadToType !== 'compressedbuffer'
+                              && this.blob.params.loadToType !== 'compressedstream';
+                if (this.fsmStreamToBuffer)
+                {
+                  this.fsmStreamToBuffer.setStream(data?.Body, unzip);
+                  this.waitOn(this.fsmStreamToBuffer);
+                }
+                else
+                {
+                  this.fsmStreamToStream.setStream(data?.Body, unzip);
+                  this.waitOn(this.fsmStreamToStream);
+                }
+                this.setState(FSM.FSM_PENDING);
+              }
+              else
+              {
+                this._err = err;
+                this.setState(FSM.FSM_ERROR);
+              }
+            });
+          break;
+
+        case FSM.FSM_PENDING:
+          this.setState(FSM.FSM_DONE);
+          break;
+      }
+    }
+  }
+}
+
 export class FsmTransferUrl extends Storage.FsmTransferUrl
 {
   storageManager: StorageManager;
@@ -257,6 +330,28 @@ export class FsmTransferUrl extends Storage.FsmTransferUrl
   constructor(env: Environment, params: Storage.TransferParams)
   {
     super(env, params);
+  }
+
+  getSignedUrl(client: any): void
+  {
+    let s3params: any = { Bucket: this.params.bucket, Key: this.params.key };
+    if (this.params.op === 'putObject' && this.params.contentType)
+      s3params['ContentType'] = this.params.contentType;
+    if (this.params.op === 'putObject' && this.params.contentEncoding)
+      s3params['ContentEncoding'] = this.params.contentEncoding;
+    if (this.params.op === 'putObject' && this.params.cacheControl)
+      s3params['CacheControl'] = this.params.cacheControl;
+    let command = this.params.op === 'putObject' ? new PutObjectCommand(s3params) : new GetObjectCommand(s3params);
+    getSignedUrl(client, command)
+      .then((url: string) => {
+          //console.log(`5: AWS testing: S3.getSignedUrl called`);
+          //console.log(`getSignedUrl: ${this.params.op}: succeeded: ${url}`);
+          this.url = url;
+          this.setState(FSM.FSM_DONE);
+        })
+      .catch((err: any) => {
+          this.setState(FSM.FSM_ERROR);
+        });
   }
 }
 
@@ -284,9 +379,12 @@ export class StorageManager extends Storage.StorageManager
         && this.env.context.xstring('b2_application_key') !== undefined)
       this.s3map['b2'] = new S3({
                           apiVersion: '2006-03-01',
-                          endpoint: 's3.us-west-004.backblazeb2.com',
-                          accessKeyId: this.env.context.xstring('b2_application_key_id'),
-                          secretAccessKey: this.env.context.xstring('b2_application_key'),
+                          endpoint: 'https://s3.us-west-004.backblazeb2.com',
+                          region: 'us-west-004',
+                          credentials: {
+                            accessKeyId: this.env.context.xstring('b2_application_key_id'),
+                            secretAccessKey: this.env.context.xstring('b2_application_key'),
+                            },
                         });
     this.count = 0;
   }
@@ -338,33 +436,25 @@ export class StorageManager extends Storage.StorageManager
     let rq = new S3Request(blob);
     this.loadBlobIndex[id] = rq;
     blob.setLoading();
-    if (blob.params.loadToType === 'stream')
-    {
-      let fsm = new FsmStreamLoader(this.env, this, blob);
-      rq.req = fsm;
-      new FSM.FsmOnDone(this.env, fsm, (f: FSM.Fsm) => {
-          this._finishLoad(blob, id, rq, fsm.err, undefined);
-          trace.log();
+    let fsm = new FsmStreamLoaderV3(this.env, this, blob);
+    rq.req = fsm;
+    new FSM.FsmOnDone(this.env, fsm, (f: FsmStreamLoaderV3) => {
+        this._finishLoad(blob, id, rq, f.err, f.data, f.buffer);
+        trace.log();
         });
-    }
-    else
-    {
-      rq.req = this.s3(blob).getObject(params, (err: any, data: any) => {
-          this._finishLoad(blob, id, rq, err, data);
-          trace.log();
-        });
-    }
   }
 
-  _finishLoad(blob: Storage.StorageBlob, id: string, rq: S3Request, err: any, data: any)
+  _finishLoad(blob: Storage.StorageBlob, id: string, rq: S3Request, err: any, data: any, buffer: Buffer)
   {
     rq.res = this;
     if (err)
       rq.err = err;
     else
+    {
       rq.data = data;
+      rq.buffer = buffer;
+    }
 
-    rq.decode();
     blob.setLoaded(rq.result());
     blob.endLoad(rq);
     this.emit('load', blob);
@@ -390,6 +480,7 @@ export class StorageManager extends Storage.StorageManager
     this.headBlobIndex[id] = rq;
     blob.setLoading();
     rq.req = this.s3(blob).headObject(params, (err: any, data: any) => {
+        //console.log(`4: AWS testing: S3headObject called`);
         rq.res = this;
         if (err)
           rq.err = err;
@@ -470,6 +561,7 @@ export class StorageManager extends Storage.StorageManager
         body = blob.params.saveFrom;
         break;
       case 'stream':
+      case 'compressedstream':
         body = blob.params.saveFrom;
         bodyStream = body as stream.Readable;
         break;
@@ -484,6 +576,7 @@ export class StorageManager extends Storage.StorageManager
 
     params.Body = body;
     rq.req = this.s3(blob).putObject(params, (err: any, data: any) => {
+        //console.log(`3: AWS testing: S3.putObject called`);
         if (err)
           rq.err = err;
         else
@@ -521,6 +614,7 @@ export class StorageManager extends Storage.StorageManager
     this.delBlobIndex[id] = rq;
     blob.setDeleting();
     rq.req = this.s3(blob).deleteObject(params, (err: any, data: any) => {
+        //console.log(`2: AWS testing: S3.deleteObject called`);
         if (err)
           rq.err = err;
         else
@@ -558,6 +652,7 @@ export class StorageManager extends Storage.StorageManager
     this.lsBlobIndex[id] = rq;
     blob.setListing();
     rq.req = this.s3(blob).listObjectsV2(params, (err: any, data: any) => {
+        //console.log(`1: AWS testing: S3.listObjectsV2 called`);
         if (err)
           rq.err = err;
         else
@@ -579,44 +674,9 @@ export class StorageManager extends Storage.StorageManager
   {
     params = Util.shallowAssignImmutable(params, { bucket: params.bucket || 'transfers' });
     let fsm = new FsmTransferUrl(this.env, params);
-    if (fsm === null)
-    {
-      let params: any = { Bucket: this.lookupBucket(fsm.params.bucket), Fields: { key: fsm.params.key } };
-      this.s3OfBucket(params.bucket).createPresignedPost(params, (err: any, url: string) => {
-          if (err)
-          {
-            this.env.log.error(`S3: createPresignedPost failed: ${err}`);
-            fsm.setState(FSM.FSM_ERROR);
-          }
-          else
-          {
-            fsm.url = url;
-            fsm.setState(FSM.FSM_DONE);
-          }
-        });
-    }
-    else
-    {
-      let s3params: any = { Bucket: this.lookupBucket(fsm.params.bucket), Key: fsm.params.key };
-      if (params.op === 'putObject' && params.contentType)
-        s3params['ContentType'] = params.contentType;
-      if (params.op === 'putObject' && params.contentEncoding)
-        s3params['ContentEncoding'] = params.contentEncoding;
-      if (params.op === 'putObject' && params.cacheControl)
-        s3params['CacheControl'] = params.cacheControl;
-      this.s3OfBucket(params.bucket).getSignedUrl(params.op, s3params, (err: any, url: string) => {
-          if (err)
-          {
-            this.env.log.error(`S3: getSignedUrl failed: ${err}`);
-            fsm.setState(FSM.FSM_ERROR);
-          }
-          else
-          {
-            fsm.url = url;
-            fsm.setState(FSM.FSM_DONE);
-          }
-        });
-    }
+    fsm.params.bucket = this.lookupBucket(params.bucket);
+    let client = this.s3OfBucket(params.bucket);
+    fsm.getSignedUrl(client);
     return fsm;
   }
 }

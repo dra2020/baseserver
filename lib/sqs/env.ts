@@ -1,6 +1,3 @@
-// Public libraries
-import * as AWS from 'aws-sdk';
-
 import { FSM, Context, LogAbstract } from '@dra2020/baseclient';
 import * as Storage from '../storage/all';
 import { SQSManagerBase } from './sqsmanager';

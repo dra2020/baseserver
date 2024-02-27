@@ -1,5 +1,5 @@
 // Public libraries
-import * as AWS from 'aws-sdk';
+import { SQS } from '@aws-sdk/client-sqs';
 
 import { Util, FSM, Context, LogAbstract } from '@dra2020/baseclient';
 import * as Storage from '../storage/all';
@@ -65,7 +65,8 @@ class FsmQueue extends FSM.Fsm
               QueueName: this.sqsManager.toQueueName(this.options.queueName),
             };
           this.sqsManager.sqs.getQueueUrl(gparams, (err: any, data: any) => {
-              if (err && err.code !== 'AWS.SimpleQueueService.NonExistentQueue')
+              let c = err ? (err.code || err.Code) : null;
+              if (err && c !== 'AWS.SimpleQueueService.NonExistentQueue')
               {
                 this.err = err;
                 this.sqsManager.reportError('getQueueUrl', err);
@@ -356,7 +357,7 @@ export class SQSManager extends SQSManagerBase
       process.exit(1);
     }
 
-    this.sqs = new AWS.SQS({apiVersion: '2012-11-05', region: 'us-west-2'});
+    this.sqs = new SQS({apiVersion: '2012-11-05', region: 'us-west-2'});
     this.nameToQueue = new Map<string, FsmQueue>();
   }
 

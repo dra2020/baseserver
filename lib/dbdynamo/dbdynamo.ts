@@ -4,8 +4,8 @@ import * as stream from 'stream';
 import * as zlib from 'zlib';
 
 // Public dynamodb API
-import * as DynamoDB from 'aws-sdk/clients/dynamodb';
-import * as DynamoDBStreams from 'aws-sdk/clients/dynamodbstreams';
+import { DynamoDB } from '@aws-sdk/client-dynamodb';
+import { DynamoDBStreams } from '@aws-sdk/client-dynamodb-streams';
 
 // Shared libraries
 import { Util, LogAbstract, Context, FSM } from '@dra2020/baseclient';
@@ -223,9 +223,10 @@ class FsmListTables extends FSM.Fsm
         case FSM.FSM_STARTING:
           this.setState(FSM_LISTING);
           this.env.dbx.dynamodb.listTables({}, (err: any, result: any) => {
+              //console.log(`7: AWS testing: DynamoDB.listTables called`);
               if (err)
               {
-                console.log(`dynamodb: listTables error: ${JSON.stringify(err)}`);
+                //console.log(`dynamodb: listTables error: ${JSON.stringify(err)}`);
                 this.env.log.error({ event: 'dynamodb: listTables', detail: JSON.stringify(err) });
                 this.setState(FSM.FSM_ERROR);
               }
@@ -250,9 +251,10 @@ class FsmListTables extends FSM.Fsm
             this.setState(FSM_DESCRIBING);
             let params: any = { TableName: this.workStack.pop() };
             this.env.dbx.dynamodb.describeTable(params, (err: any, result: any) => {
+                //console.log(`8: AWS testing: DynamoDB.describeTable called`);
                 if (err)
                 {
-                  console.log(`dynamodb: describeTable error: ${JSON.stringify(err)}`);
+                  //console.log(`dynamodb: describeTable error: ${JSON.stringify(err)}`);
                   this.env.log.error({ event: 'dynamodb: describeTable', detail: JSON.stringify(err) });
                   this.setState(FSM.FSM_ERROR);
                 }
@@ -504,9 +506,10 @@ class FsmExecuteCreate extends FSM.Fsm
 
     this.setState(FSM.FSM_PENDING);
     this.col.dynamodb.createTable(options, (err: any, data: any) => {
+        //console.log(`9: AWS testing: DynamoDB.createTable called`);
         if (err)
         {
-          console.log(`dynamodb: createTable error: ${JSON.stringify(err)}`);
+          //console.log(`dynamodb: createTable error: ${JSON.stringify(err)}`);
           this.env.log.error({ event: 'dynamodb: createTable', detail: JSON.stringify(err) });
           this.setState(FSM.FSM_ERROR);
         }
@@ -805,6 +808,7 @@ export class DynamoUpdate extends DB.DBUpdate
           this.setState(FSM.FSM_DONE);
         }
         this.dyncol.dynamodb.updateItem(params, (err: any, result: any) => {
+            //console.log(`10: AWS testing: DynamoDB.updateItem called`);
             if (this.done)
               return;
             else if (err)
@@ -938,6 +942,7 @@ export class DynamoDelete extends DB.DBDelete
       {
         this.setState(FSM.FSM_PENDING);
         this.dyncol.dynamodb.deleteItem(this.query, (err: any, result: any) => {
+            //console.log(`11: AWS testing: DynamoDB.deleteItem called`);
             if (this.done)
               return;
             else if (err)
@@ -1005,6 +1010,7 @@ export class DynamoFind extends DB.DBFind
         if (this.filter.isquery === undefined)
         {
           this.dyncol.dynamodb.getItem(this.filter, (err: any, result: any) => {
+              //console.log(`12: AWS testing: DynamoDB.getItem called`);
               if (this.done)
                 return;
               else if (err)
@@ -1027,6 +1033,7 @@ export class DynamoFind extends DB.DBFind
         {
           delete this.filter.isquery;
           this.dyncol.dynamodb.query(this.filter, (err: any, result: any) => {
+              //console.log(`13: AWS testing: DynamoDB.query called`);
               if (this.done)
                 return;
               else if (err)
@@ -1094,6 +1101,7 @@ export class DynamoQuery extends DB.DBQuery
     }
     this.setState(FSM_SCANNING);
     this.dyncol.dynamodb.scan(param, (err: any, result: any) => {
+        //console.log(`14: AWS testing: DynamoDB.scan called`);
         if (this.done)
           return;
         else if (err)
@@ -1145,6 +1153,7 @@ export class DynamoQuery extends DB.DBQuery
           }
           this.setState(FSM.FSM_PENDING);
           this.dyncol.dynamodb.query(param, (err: any, result: any) => {
+              //console.log(`15: AWS testing: DynamoDB.query called`);
               if (this.done)
                 return;
               else if (err)
@@ -1246,6 +1255,7 @@ export class FsmTableShards extends FSM.Fsm
         case FSM.FSM_STARTING:
           this.setState(FSM_LISTING);
           this.env.dbx.dynamostream.listStreams({ TableName: this.table.TableName}, (err: any, result: any) => {
+              //console.log(`16: AWS testing: DynamoStream.listStreams called`);
               if (err)
               {
                 console.log(`dynamodb: listStreams error: ${JSON.stringify(err)}`);
@@ -1283,6 +1293,7 @@ export class FsmTableShards extends FSM.Fsm
             delete this.lastKey;
           }
           this.env.dbx.dynamostream.describeStream(params, (err: any, result: any) => {
+              //console.log(`17: AWS testing: DynamoStream.describeStream called`);
               if (err)
               {
                 console.log(`dynamodb: describeStream failure: ${JSON.stringify(err)}`);
@@ -1401,6 +1412,7 @@ class FsmReadOneShard extends FSM.Fsm
             iterParams.SequenceNumber = this.shard.LastSequenceNumber;
           }
           this.env.dbx.dynamostream.getShardIterator(iterParams, (err: any, result: any) => {
+              //console.log(`18: AWS testing: DynamoStream.getShardIterator called`);
               // Cancel by externally setting to DONE
               if (this.done)
                 return;
@@ -1423,6 +1435,7 @@ class FsmReadOneShard extends FSM.Fsm
           this.setState(FSM_GETRECORDS);
           let recordParams: any = { ShardIterator: this.shard.ShardIterator };
           this.env.dbx.dynamostream.getRecords(recordParams, (err: any, result: any) => {
+              //console.log(`19: AWS testing: DynamoStream.getRecords called`);
               // Cancel by externally setting to DONE
               if (this.done)
                 return;

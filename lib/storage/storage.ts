@@ -44,7 +44,7 @@ export interface TransferParams
 }
 
 // Where does the source data for save come from?
-export type DispositionType = 'object' | 'string' | 'buffer' | 'compressedbuffer' | 'stream' | 'filepath';
+export type DispositionType = 'object' | 'string' | 'buffer' | 'compressedbuffer' | 'stream' | 'compressedstream' | 'filepath';
 export type LoadToFilter = (blob: StorageBlob, a: any) => any;
 
 export interface BlobParams
@@ -420,6 +420,7 @@ export class StorageBlob
         switch (this.params.loadToType)
         {
           case 'stream':
+          case 'compressedstream':
             // No work here, processing happened in stream handlers
             break;
           case 'buffer':
@@ -527,12 +528,11 @@ export class StorageBlob
 
   toLoadStream(): stream.Readable
     {
-      return this.params.loadToType === 'stream' ? this.params.loadTo as stream.Readable : null;
+      return this.params.loadTo as stream.Readable;
     }
 
   setLoadStream(rs: stream.Readable): void
     {
-      this.params.loadToType = 'stream';
       this.params.loadTo = rs;
     }
 }

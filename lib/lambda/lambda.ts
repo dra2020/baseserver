@@ -4,7 +4,7 @@ import * as DB from '../dbabstract/all';
 
 import { Environment } from './env';
 
-import * as Lambda from 'aws-sdk/clients/lambda';
+import { Lambda } from '@aws-sdk/client-lambda';
 
 class FsmList extends FSM.Fsm
 {
@@ -21,6 +21,7 @@ class FsmList extends FSM.Fsm
     {
       this.setState(FSM.FSM_PENDING);
       this.env.lambdaManager.awslambda.listFunctions({}, (err: any, data: any) => {
+          //console.log('20: AWS testing: lambda.listFunctions called');
           if (err)
           {
             this.env.log.chatter(`listFunctions: failed: ${JSON.stringify(err)}`);
@@ -75,6 +76,7 @@ export class FsmInvoke extends FSM.Fsm
         Payload: JSON.stringify(this.params)
         };
       this.env.lambdaManager.awslambda.invoke(awsparam, (err: any, data: any) => {
+          //console.log('21: AWS testing: lambda.invoke called');
           let payload: any = data && data.Payload ? data.Payload : null;
           try
           {
@@ -188,7 +190,6 @@ export class Manager extends FSM.Fsm
       {
         apiVersion: '2015-03-31',
         region: 'us-west-2',
-        httpOptions: { timeout: 300000 },
       });
   }
 
