@@ -96,10 +96,7 @@ export class Queues
   {
     this.queues.forEach((q: Queue) => {
         if (q.isdead())
-        {
           this.queues.delete(q.queueName);
-          console.log(`simplesqs.server: cleaning stale queue ${q.queueName} with ${q.length} unreceived messages`);
-        }
         else
           q.clean();
       });
