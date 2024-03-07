@@ -6,6 +6,9 @@ import { Environment } from './env';
 
 import { Lambda } from '@aws-sdk/client-lambda';
 
+import * as u from 'util';
+let coder: Util.Coder = { encoder: new u.TextEncoder(), decoder: new u.TextDecoder('utf-8') };
+
 class FsmList extends FSM.Fsm
 {
   constructor(env: Environment)
@@ -80,7 +83,7 @@ export class FsmInvoke extends FSM.Fsm
           let payload: any = data && data.Payload ? data.Payload : null;
           try
           {
-            this.result = (typeof payload === 'string') ? JSON.parse(payload) : payload;
+            this.result = (typeof payload === 'string') ? JSON.parse(payload) : JSON.parse(Util.u82s(coder, payload, 0, payload.length));
           }
           catch (exception)
           {
