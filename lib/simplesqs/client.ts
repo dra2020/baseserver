@@ -11,7 +11,7 @@ import { SQSMessage } from '../sqs/sqsmessage';
 
 import * as Q from './queue';
 import { AgentPool } from './agentpool';
-import { MessageParams } from './messageparams';
+import { MessageData, MessageParams } from './messageparams';
 
 class FsmClientRequest extends FSM.Fsm
 {
@@ -47,6 +47,7 @@ class FsmClientRequest extends FSM.Fsm
         delete this.bufs;
         delete this.response; // Only go through once
         this.setState(this.body?.statuscode === 0 ? FSM.FSM_DONE : FSM.FSM_ERROR);
+        this.client.checkQueue();
         this.end();
         this.client.freeOptions(this.httpoptions);
       }
@@ -62,6 +63,7 @@ class FsmClientRequest extends FSM.Fsm
   {
     console.log(`simplesqs error: ${msg}`);
     this.setState(FSM.FSM_ERROR);
+    this.client.checkQueue();
   }
 
   tick(): void
@@ -93,9 +95,9 @@ class FsmClientRequest extends FSM.Fsm
 
 export class FsmClientSend extends FsmClientRequest
 {
-  constructor(env: Environment, client: SimpleSQSClient, queueName: string, message: SQSMessage)
+  constructor(env: Environment, client: SimpleSQSClient, batch: MessageData[])
   {
-    super(env, client, { command: 'send', queueName, message });
+    super(env, client, { command: 'send', batch });
   }
 
   end(): void
@@ -118,27 +120,72 @@ export class FsmClientReceive extends FsmClientRequest
   }
 }
 
+export class FsmClientQueueSend extends FSM.Fsm
+{
+  md: MessageData;
+
+  constructor(env: Environment, md: MessageData)
+  {
+    super(env);
+    this.md = md;
+  }
+
+  sent(fsmSend: FsmClientSend): void
+  {
+    this.waitOn(fsmSend);
+    this.setState(FSM.FSM_PENDING);
+  }
+
+  tick(): void
+  {
+    if (this.ready && this.state === FSM.FSM_PENDING)
+      this.setState(this.isDependentError ? FSM.FSM_ERROR : FSM.FSM_DONE);
+  }
+}
+
+const SEND_BATCH_SIZE = 20;
+
 export class SimpleSQSClient
 {
   env: Environment;
   targeturl: any;
   httpoptions: any;
   agentPool: AgentPool;
+  fsmSendQueued: FsmClientQueueSend[];
+  fsmSendOutstanding: FsmClientSend;
 
   constructor(env: Environment, urlstring: string = Q.DefaultServerUrl)
+  {
+    this.env = env;
+    this.targeturl = new url.URL(urlstring);
+    this.httpoptions = {
+      protocol: this.targeturl.protocol,
+      host: this.targeturl.hostname,
+      port: this.targeturl.port ? this.targeturl.port : Q.DefaultPort,
+      agent: null,
+      method: 'POST',
+      path: '/',
+      };
+    this.agentPool = new AgentPool();
+    this.fsmSendQueued = [];
+  }
+
+  checkQueue(): void
+  {
+    if (this.fsmSendOutstanding?.done)
+      delete this.fsmSendOutstanding;
+    if (! this.fsmSendOutstanding && this.fsmSendQueued.length)
     {
-      this.env = env;
-      this.targeturl = new url.URL(urlstring);
-      this.httpoptions = {
-        protocol: this.targeturl.protocol,
-        host: this.targeturl.hostname,
-        port: this.targeturl.port ? this.targeturl.port : Q.DefaultPort,
-        agent: null,
-        method: 'POST',
-        path: '/',
-        };
-      this.agentPool = new AgentPool();
+      // Get next batch to send
+      let fsmBatch = this.fsmSendQueued.splice(0, SEND_BATCH_SIZE);
+      let batch: MessageData[] = fsmBatch.map(f => f.md);
+      console.log(`simplesqs: send batch size is ${batch.length}`);
+      // Send it
+      this.fsmSendOutstanding = new FsmClientSend(this.env, this, batch);
+      // Notify queued sends
+      fsmBatch.forEach(f => f.sent(this.fsmSendOutstanding));
     }
+  }
 
   allocOptions(): any
   {
@@ -150,9 +197,12 @@ export class SimpleSQSClient
     this.agentPool.free(options.agent);
   }
 
-  send(queueName: string, m: SQSMessage): FsmClientSend
+  send(queueName: string, message: SQSMessage): FsmClientQueueSend
   {
-    return new FsmClientSend(this.env, this, queueName, m);
+    let fsm = new FsmClientQueueSend(this.env, { queueName, message });
+    this.fsmSendQueued.push(fsm);
+    this.checkQueue();
+    return fsm;
   }
 
   receive(queueName: string): FsmClientReceive

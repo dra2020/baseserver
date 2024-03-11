@@ -1,9 +1,14 @@
 import { SQSMessage } from '../sqs/sqsmessage';
 
-export interface MessageParams
+export interface MessageData
 {
   queueName?: string,
-  command?: string,
   message?: SQSMessage,
+}
+
+export interface MessageParams extends MessageData
+{
+  command?: string,
+  batch?: MessageData[]; // only applies to send
 }
 

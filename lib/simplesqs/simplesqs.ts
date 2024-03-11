@@ -54,7 +54,7 @@ export class FsmSendSimple extends FsmSend
   err: any;
   dataString: string;
   trace: LogAbstract.AsyncTimer;
-  fsmSend: Client.FsmClientSend;
+  fsmSend: Client.FsmClientQueueSend;
 
   constructor(env: Environment, q: FsmQueue, m: SQSMessage)
   {

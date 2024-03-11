@@ -5,8 +5,9 @@ import * as url from 'url';
 import { Util } from '@dra2020/baseclient';
 
 import * as Q from './queue';
-import { MessageParams } from './messageparams';
+import { MessageData, MessageParams } from './messageparams';
 import { LongPoll } from './longpoll';
+import { SQSMessage } from '../sqs/sqsmessage';
 
 export class SimpleSQSServer
 {
@@ -140,17 +141,31 @@ class OneRequest
         {
           let s = buf.toString('utf8');
           let p = JSON.parse(s) as MessageParams;
-          this.q = this.server.queues.queueOf(p.queueName);
           if (p && p.command)
           {
             switch (p.command)
             {
               case 'send':
-                this.q.send(p.message);
-                this.server.longpoll.checkQueue(this.q);
+                if (p.batch)
+                {
+                  let qs = new Map<string, Q.Queue>();
+                  p.batch.forEach((md: MessageData) => {
+                      let q = this.server.queues.queueOf(md.queueName);
+                      q.send(md.message);
+                      qs.set(md.queueName, q);
+                    });
+                  qs.forEach(q => this.server.longpoll.checkQueue(q));
+                }
+                else
+                {
+                  let q = this.server.queues.queueOf(p.queueName);
+                  q.send(p.message);
+                  this.server.longpoll.checkQueue(q);
+                }
                 break;
 
               case 'receive':
+                this.q = this.server.queues.queueOf(p.queueName);
                 this.body.result = this.q.receive();
                 if (this.body.result.length == 0)
                 {
