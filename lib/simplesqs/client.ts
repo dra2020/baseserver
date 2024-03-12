@@ -179,7 +179,6 @@ export class SimpleSQSClient
       // Get next batch to send
       let fsmBatch = this.fsmSendQueued.splice(0, SEND_BATCH_SIZE);
       let batch: MessageData[] = fsmBatch.map(f => f.md);
-      console.log(`simplesqs: send batch size is ${batch.length}`);
       // Send it
       this.fsmSendOutstanding = new FsmClientSend(this.env, this, batch);
       // Notify queued sends
