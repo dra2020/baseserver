@@ -85,7 +85,9 @@ export class FsmSendSimple extends FsmSend
             let blob = SQSBlob.createForSave(this.env, this.dataString);
             this.waitOn(blob.fsmSave);
             this.dataString = JSON.stringify(blob.params.id);
-            this.env.log.chatter(`simplesqs: queuing large message (${nBytes} bytes) using blob indirect to ${blob.params.id}`);
+            // Log excessive sizes
+            if (nBytes > 2000000)
+              this.env.log.chatter(`simplesqs: queuing large message (${nBytes} bytes) using blob indirect to ${blob.params.id}`);
             break;
           }
           // fall through on small messages

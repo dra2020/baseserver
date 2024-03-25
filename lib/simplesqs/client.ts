@@ -13,6 +13,8 @@ import * as Q from './queue';
 import { AgentPool } from './agentpool';
 import { MessageData, MessageParams } from './messageparams';
 
+let nPending = 0;
+
 class FsmClientRequest extends FSM.Fsm
 {
   client: SimpleSQSClient;
@@ -47,6 +49,7 @@ class FsmClientRequest extends FSM.Fsm
         delete this.bufs;
         delete this.response; // Only go through once
         this.setState(this.body?.statuscode === 0 ? FSM.FSM_DONE : FSM.FSM_ERROR);
+        nPending--;
         this.client.checkQueue();
         this.end();
         this.client.freeOptions(this.httpoptions);
@@ -63,6 +66,7 @@ class FsmClientRequest extends FSM.Fsm
   {
     console.log(`simplesqs error: ${msg}`);
     this.setState(FSM.FSM_ERROR);
+    nPending--;
     this.client.checkQueue();
   }
 
@@ -70,6 +74,9 @@ class FsmClientRequest extends FSM.Fsm
   {
     if (this.ready)
     {
+      nPending++;
+      if (nPending > 20)
+        this.env.log.chatter(`simplesqs: anomalous number of pending client requests (${nPending})`);
       this.response = null;
       this.statusCode = 0;
       this.request = http.request(this.httpoptions, (res: any) => {
