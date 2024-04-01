@@ -6,6 +6,8 @@ import { Util, Context, LogAbstract, FSM } from '@dra2020/baseclient';
 
 import { Environment } from './env';
 
+import { FsmAPIWatch } from '../utils/all';
+
 export const ESuccess: number = 0;
 export const EFail: number = 1;
 export const ENotFound: number = 2;
@@ -252,6 +254,7 @@ export class StorageBlob
     {
       this.state |= StorageStateListing;
       this.fsmList.setState(FSM.FSM_PENDING);
+      this.env.storageManager.fsmAPIWatch.setPending(this.fsmList);
     }
 
   setListed(): void
@@ -319,6 +322,7 @@ export class StorageBlob
       this.state |= StorageStateLoading;
       this.tStarted = new Date();
       this.fsmLoad.setState(FSM.FSM_PENDING);
+      this.env.storageManager.fsmAPIWatch.setPending(this.fsmLoad);
     }
 
   setLoaded(result: number): void
@@ -340,6 +344,7 @@ export class StorageBlob
       this.state = StorageStateSaving;
       this.tStarted = new Date();
       this.fsmSave.setState(FSM.FSM_PENDING);
+      this.env.storageManager.fsmAPIWatch.setPending(this.fsmSave);
     }
 
   setSaved(result: number): void
@@ -356,6 +361,7 @@ export class StorageBlob
     {
       this.state |= StorageStateDeleting;
       this.fsmDel.setState(FSM.FSM_PENDING);
+      this.env.storageManager.fsmAPIWatch.setPending(this.fsmDel);
     }
 
   setDeleted(result: number): void
@@ -381,6 +387,7 @@ export class StorageBlob
     {
       sm.head(this);
       this.fsmList.setState(FSM.FSM_PENDING); // result fsmList for head request, results show up in props
+      this.env.storageManager.fsmAPIWatch.setPending(this.fsmList);
     }
 
   checkSave(sm: StorageManager): void
@@ -564,6 +571,7 @@ export class StorageManager
   lsBlobIndex: BlobRequestIndex;
   onList: any;
   bucketMap: BucketMap;
+  fsmAPIWatch: FsmAPIWatch;
 
   constructor(env: Environment, bucketMap?: BucketMap)
     {
@@ -575,6 +583,7 @@ export class StorageManager
       this.lsBlobIndex = {};
       this.onList = {};
       this.bucketMap = bucketMap;
+      this.fsmAPIWatch = new FsmAPIWatch(env, { warningIncrement: 100, title: 'storage' });
     }
 
   save(blob: StorageBlob): void {} // override

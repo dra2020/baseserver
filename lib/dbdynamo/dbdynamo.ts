@@ -12,6 +12,7 @@ import { Util, LogAbstract, Context, FSM } from '@dra2020/baseclient';
 
 import * as DB from '../dbabstract/all';
 import * as Storage from '../storage/all';
+import { FsmAPIWatch } from '../utils/all';
 
 export interface Environment
 {
@@ -181,22 +182,6 @@ function keysPresent(o: any, keyschema: any, attributeIndex: any): any
   return typedKey;
 }
 
-
-class FsmAPIWatch extends FSM.Fsm
-{
-  constructor(env: Environment)
-  {
-    super(env);
-  }
-
-  get env(): Environment { return this._env as Environment }
-
-  tick(): void
-  {
-    //this.env.log.value({ event: 'dynamodb: APIs outstanding', value: this.nWaitOn });
-  }
-}
-
 const FSM_LISTING = FSM.FSM_CUSTOM1;
 const FSM_DESCRIBING = FSM.FSM_CUSTOM2;
 const FSM_DESCRIBE = FSM.FSM_CUSTOM3;
@@ -308,7 +293,7 @@ export class DynamoClient extends DB.DBClient
     this.pendingCols = [];
     this.existingCols = {};
     this.serializerUpdate = new FSM.FsmSerializer(env);
-    this.fsmAPIWatch = new FsmAPIWatch(env);
+    this.fsmAPIWatch = new FsmAPIWatch(env, { title: 'DBDynamo' } );
   }
 
   get env(): EnvironmentEx { return this._env as EnvironmentEx; }
@@ -329,7 +314,7 @@ export class DynamoClient extends DB.DBClient
     let col = new DynamoCollection(this.env, this, name, options);
     this.ensureCollection(col);
     this.existingCols[name] = col;
-    this.fsmAPIWatch.waitOn(col);
+    this.fsmAPIWatch.setPending(col);
     return col;
   }
 
@@ -354,7 +339,7 @@ export class DynamoClient extends DB.DBClient
     let update = new DynamoUpdate(this.env, col, query, values);
     if (query && query.id)
       this.serializerUpdate.serialize(query.id, update);
-    this.fsmAPIWatch.waitOn(update);
+    this.fsmAPIWatch.setPending(update);
     return update;
   }
 
@@ -363,42 +348,42 @@ export class DynamoClient extends DB.DBClient
     let unset = new DynamoUnset(this.env, col, query, values);
     if (query && query.id)
       this.serializerUpdate.serialize(query.id, unset);
-    this.fsmAPIWatch.waitOn(unset);
+    this.fsmAPIWatch.setPending(unset);
     return unset;
   }
 
   createDelete(col: DynamoCollection, query: any): DB.DBDelete
   {
     let del = new DynamoDelete(this.env, col, query);
-    this.fsmAPIWatch.waitOn(del);
+    this.fsmAPIWatch.setPending(del);
     return del;
   }
 
   createFind(col: DynamoCollection, filter: any): DB.DBFind
   {
     let find = new DynamoFind(this.env, col, filter);
-    this.fsmAPIWatch.waitOn(find);
+    this.fsmAPIWatch.setPending(find);
     return find;
   }
 
   createQuery(col: DynamoCollection, filter: any): DB.DBQuery
   {
     let query = new DynamoQuery(this.env, col, filter);
-    this.fsmAPIWatch.waitOn(query);
+    this.fsmAPIWatch.setPending(query);
     return query;
   }
 
   createIndex(col: DynamoCollection, uid: string): DB.DBIndex
   {
     let index = new DynamoIndex(this.env, col, uid);
-    this.fsmAPIWatch.waitOn(index);
+    this.fsmAPIWatch.setPending(index);
     return index;
   }
 
   createClose(): DB.DBClose
   {
     let dbclose = new DynamoClose(this.env, this);
-    this.fsmAPIWatch.waitOn(dbclose);
+    this.fsmAPIWatch.setPending(dbclose);
     return dbclose;
   }
 
