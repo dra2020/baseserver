@@ -53,6 +53,7 @@ export class FsmAPIWatch extends FSM.Fsm
     if (pending.size == this.warningLevel.get(label))
     {
       console.log(`${this.options.title}: ${label}: ${pending.size} pending operations`);
+      console.trace();
       this.warningLevel.set(label, this.warningLevel.get(label)+this.options.warningIncrement);
     }
   }
