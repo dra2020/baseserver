@@ -529,6 +529,7 @@ export class DynamoCollection extends DB.DBCollection
   attributeIndex: any;
   keyIndex: any;
   fsmStream: FsmTableStream;
+  __name: string;
 
   constructor(env: Environment, client: DynamoClient, name: string, options: any)
   {
@@ -536,6 +537,7 @@ export class DynamoCollection extends DB.DBCollection
     this.waitOn(client);
     this.col = { TableName: `${this.options.prefix}-${client.DBName}-${name}` };
     this.constructIndex();
+    this.__name = `dynamocollection.${name}`;
   }
 
   get env(): Environment { return this._env as Environment; }
@@ -746,10 +748,12 @@ export class DynamoCollection extends DB.DBCollection
 export class DynamoUpdate extends DB.DBUpdate
 {
   trace: LogAbstract.AsyncTimer;
+  __name: string;
 
   constructor(env: Environment, col: DynamoCollection, query: any, values: any)
   {
     super(env, col, col.toInternalQuery(query), col.toInternalExpression(values));
+    this.__name = `${col.__name}.update`;
     if (this.query.Key === undefined)
     {
       console.log(`dynamodb: DynamoUpdate internal failure: colquery missing Key: ${JSON.stringify(query)}`);
@@ -819,10 +823,12 @@ export class DynamoUpdate extends DB.DBUpdate
 export class DynamoUnset extends DB.DBUnset
 {
   trace: LogAbstract.AsyncTimer;
+  __name: string;
 
   constructor(env: Environment, col: DynamoCollection, query: any, values: any)
   {
     super(env, col, col.toInternalQuery(query), col.toInternalExpression(values));
+    this.__name = `${col.__name}.unset`;
     if (this.query.Key === undefined)
     {
       console.log(`dynamodb: DynamoUnset internal failure: query missing Key: ${JSON.stringify(query)}`);
@@ -887,10 +893,12 @@ export class DynamoUnset extends DB.DBUnset
 export class DynamoDelete extends DB.DBDelete
 {
   trace: LogAbstract.AsyncTimer;
+  __name: string;
 
   constructor(env: Environment, col: DynamoCollection, query: any)
   {
     super(env, col, col.toInternalQuery(query));
+    this.__name = `${col.__name}.delete`;
     if (this.query.Key === undefined)
     {
       console.log(`dynamodb: DynamoDelete internal failure: query missing Key: ${JSON.stringify(query)}`);
@@ -953,10 +961,12 @@ export class DynamoDelete extends DB.DBDelete
 export class DynamoFind extends DB.DBFind
 {
   trace: LogAbstract.AsyncTimer;
+  __name: string;
 
   constructor(env: Environment, col: DynamoCollection, filter: any)
   {
     super(env, col, col.toInternalQuery(filter));
+    this.__name = `${col.__name}.find`;
     if (this.filter.Key === undefined && this.filter.IndexName === undefined)
     {
       console.log(`dynamodb: DynamoFind internal failure: (col=${col.name}) missing Key: ${JSON.stringify(filter)}`);
@@ -1056,10 +1066,12 @@ export class DynamoQuery extends DB.DBQuery
 {
   trace: LogAbstract.AsyncTimer;
   lastKey: any;
+  __name: string;
 
   constructor(env: Environment, col: DynamoCollection, filter: any)
   {
     super(env, col, col.toInternalQuery(filter));
+    this.__name = `${col.__name}.query`;
     this.waitOn(col);
     this.trace = new LogAbstract.AsyncTimer(env.log, `dynamodb: query(col=${col.name})`);
     if (this.env.context.xnumber('verbosity'))

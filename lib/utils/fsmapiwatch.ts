@@ -41,7 +41,7 @@ export class FsmAPIWatch extends FSM.Fsm
     // We need to get notified when this completes
     if (! fsm.done) this.waitOn(fsm);
 
-    let label = fsm.constructor.name;
+    let label = (fsm as any).__name || fsm.constructor.name;
     let pending = this.pendingMap.get(label);
     if (!pending)
     {
@@ -52,7 +52,10 @@ export class FsmAPIWatch extends FSM.Fsm
     pending.add(fsm);
     if (pending.size == this.warningLevel.get(label))
     {
-      console.log(`${this.options.title}: ${label}: ${pending.size} pending operations`);
+      // Spit all currently pending operations
+      this.pendingMap.forEach((p: Set<any>, l: string) => {
+        if (p.size) console.log(`${this.options.title}: ${l}: ${p.size} pending operations`)});
+      // Also provide stack trace
       console.trace();
       this.warningLevel.set(label, this.warningLevel.get(label)+this.options.warningIncrement);
     }
