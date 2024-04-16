@@ -63,7 +63,7 @@ export class FsmAPIWatch extends FSM.Fsm
 
   waitOnCompleted(fsm: FSM.Fsm): void
   {
-    let label = fsm.constructor.name;
+    let label = (fsm as any).__name || fsm.constructor.name;
     let set = this.pendingMap.get(label);
     set.delete(fsm);
   }
