@@ -16,9 +16,10 @@ export interface APIWatchOptions
 {
   warningIncrement?: number,
   title?: string,
+  trace?: boolean,
 }
 
-const Options: APIWatchOptions = { warningIncrement: 500, title: 'APIWatch' };
+const Options: APIWatchOptions = { warningIncrement: 500, title: 'APIWatch', trace: false };
 
 export class FsmAPIWatch extends FSM.Fsm
 {
@@ -56,7 +57,8 @@ export class FsmAPIWatch extends FSM.Fsm
       this.pendingMap.forEach((p: Set<any>, l: string) => {
         if (p.size) console.log(`${this.options.title}: ${l}: ${p.size} pending operations`)});
       // Also provide stack trace
-      console.trace();
+      if (this.options.trace)
+        console.trace();
       this.warningLevel.set(label, this.warningLevel.get(label)+this.options.warningIncrement);
     }
   }
