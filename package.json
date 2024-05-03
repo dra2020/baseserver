@@ -1,6 +1,6 @@
 {
   "name": "@dra2020/baseserver",
-  "version": "2.0.18",
+  "version": "2.0.19",
   "description": "Utility functions for NodeJS-based Javascript projects.",
   "main": "dist/baseserver.js",
   "types": "./dist/all/all.d.ts",
@@ -46,8 +46,8 @@
     "@aws-sdk/client-s3": "^3.525.0",
     "@aws-sdk/client-sqs": "^3.525.0",
     "@aws-sdk/s3-request-presigner": "^3.525.0",
-    "@dra2020/baseclient": "^1.0.124",
-    "@dra2020/dra-types": "^1.8.89",
+    "@dra2020/baseclient": "^1.0.127",
+    "@dra2020/dra-types": "^1.8.93",
     "@dra2020/topojson-client": "^3.2.12",
     "@dra2020/topojson-server": "^3.0.103",
     "@dra2020/topojson-simplify": "^3.0.102",
