@@ -83,6 +83,11 @@ export class FsmStreamToStream extends FSM.Fsm
     return this.passThrough;
   }
 
+  setNoStream(): void
+  {
+    this.passThrough.emit('error', 'Stream read error.');
+  }
+
   setStream(s?: stream.Readable, unzip?: boolean): void
   {
     if (s)

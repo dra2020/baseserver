@@ -311,6 +311,8 @@ export class FsmStreamLoaderV3 extends FSM.Fsm
               {
                 this._err = err;
                 this.setState(FSM.FSM_ERROR);
+                if (this.fsmStreamToStream)
+                  this.fsmStreamToStream.setNoStream();
               }
             });
           break;
