@@ -1103,6 +1103,7 @@ export class DynamoQuery extends DB.DBQuery
           return;
         else if (err)
         {
+          this.fsmResult.setState(FSM.FSM_ERROR);
           this.setState(FSM.FSM_ERROR);
           this.trace.log();
           this.env.log.error({ event: 'dynamodb: query error', detail: JSON.stringify(err) });
@@ -1155,6 +1156,7 @@ export class DynamoQuery extends DB.DBQuery
                 return;
               else if (err)
               {
+                this.fsmResult.setState(FSM.FSM_ERROR);
                 this.setState(FSM.FSM_ERROR);
                 this.trace.log();
                 this.env.log.error({ event: 'dynamodb: query error', detail: JSON.stringify(err) });
