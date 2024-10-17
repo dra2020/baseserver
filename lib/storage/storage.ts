@@ -174,6 +174,7 @@ export class StorageBlob
   fsmList: FSM.Fsm;
   _props: FSM.FsmArray;
   _keys: FSM.FsmArray;
+  br: BlobRequest;
 
   constructor(env: Environment, params: BlobParams)
     {
@@ -415,10 +416,13 @@ export class StorageBlob
   endSave(br: BlobRequest): void
     {
       // fsmSave triggered by setSaved
+      this.br = br;
     }
 
   endLoad(br: BlobRequest): void
     {
+      this.br = br;
+
       if (this.params.loadToType === undefined)
         throw 'endLoad: loadToType must be set';
 
@@ -481,6 +485,8 @@ export class StorageBlob
 
   endHead(br: BlobRequest): void
     {
+      this.br = br;
+
       if (br.result() == ESuccess)
       {
         let a = br.asProps();
@@ -492,6 +498,8 @@ export class StorageBlob
 
   endDelete(br: BlobRequest): void
     {
+      this.br = br;
+
       // Note that fsmDel is marked complete in setDeleted
     }
 
@@ -509,6 +517,8 @@ export class StorageBlob
 
   endList(br: BlobRequest): void
     {
+      this.br = br;
+
       if (! br.result())
       {
         let props = br.asProps();
