@@ -63,6 +63,8 @@ export interface BlobParams
   ContentEncoding?: string;       // 'gzip' only
   ContentType?: string;           // 'application/json' or 'application/octet-stream'
   CacheControl?: string;          // 'no-cache' or 'max-age=14400'
+  autoContinue?: boolean;         // set to false to not autoContinue - undefined defaults to true!
+  continuationToken?: string;     // set when autoContinue false if more to process.
 }
 
 export class FsmTransferUrl extends FSM.Fsm
@@ -511,6 +513,7 @@ export class StorageBlob
       }
       else
       {
+        delete this.params.continuationToken;
         sm.ls(this, continuationToken);
       }
     }
@@ -524,13 +527,26 @@ export class StorageBlob
         let props = br.asProps();
         this._keys.concat(props.map(p => p.Key));
         this._props.concat(props);
+        let autoContinued = false;
         if (br.continuationToken())
-          this.env.storageManager.ls(this, br.continuationToken());
+        {
+          if (this.params.autoContinue === undefined || this.params.autoContinue)
+          {
+            delete this.params.continuationToken;
+            this.env.storageManager.ls(this, br.continuationToken());
+            autoContinued = true;
+          }
+          else
+            this.params.continuationToken = br.continuationToken();
+        }
         else
+          delete this.params.continuationToken;
+        if (! autoContinued)
         {
           // Set _keys and _props to done since might not have happened if no values to push
           this._keys.setState(FSM.FSM_DONE);
           this._props.setState(FSM.FSM_DONE);
+          // Caller can distinguish done-done based on whether continuationToken was reset
           this.fsmList.setState(FSM.FSM_DONE);
         }
       }
