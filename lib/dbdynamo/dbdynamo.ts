@@ -231,6 +231,9 @@ class FsmListTables extends FSM.Fsm
           break;
 
         case FSM_DESCRIBE:
+          // 07.09.25: Actually, we don't need table description and it is expensive to fetch on every
+          // startup. Let's skip this. The only information required is existence, which we set above.
+          this.workStack = [];
           if (this.workStack && this.workStack.length > 0)
           {
             this.setState(FSM_DESCRIBING);
