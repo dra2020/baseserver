@@ -1034,10 +1034,16 @@ export class DynamoFind extends DB.DBFind
               //console.log(`13: AWS testing: DynamoDB.query called`);
               if (this.done)
                 return;
+              if (err?.name === 'ThrottlingException')
+              {
+                this.env.log.chatter(`dynamodb: query in find: throttling exception; backing off`);
+                this.setState(FSM.FSM_STARTING);
+                this.waitOn(new FSM.FsmSleep(this.env, 1000));
+              }
               else if (err)
               {
                 this.trace.log();
-                this.env.log.error({ event: 'dynamodb: query error', detail: JSON.stringify(err) });
+                this.env.log.error({ event: 'dynamodb: query error in find', detail: JSON.stringify(err) });
                 this.env.log.chatter(`dynamodb: query error: ${JSON.stringify(err)}`);
                 this.setState(FSM.FSM_ERROR);
               }
@@ -1071,6 +1077,7 @@ export class DynamoQuery extends DB.DBQuery
   trace: LogAbstract.AsyncTimer;
   lastKey: any;
   __name: string;
+  backoff: number;
 
   constructor(env: Environment, col: DynamoCollection, filter: any)
   {
@@ -1078,6 +1085,7 @@ export class DynamoQuery extends DB.DBQuery
     this.__name = `${col.__name}.query`;
     this.waitOn(col);
     this.trace = new LogAbstract.AsyncTimer(env.log, `dynamodb: query(col=${col.name})`);
+    this.backoff = 1;
     if (this.env.context.xnumber('verbosity'))
       this.env.log.event({ event: `dynamodb: query in ${col.name}`, detail: JSON.stringify(filter) });
   }
@@ -1158,6 +1166,13 @@ export class DynamoQuery extends DB.DBQuery
               //console.log(`15: AWS testing: DynamoDB.query called`);
               if (this.done)
                 return;
+              if (err?.name === 'ThrottlingException')
+              {
+                this.env.log.chatter(`dynamodb: query: throttling exception; backing off for ${this.backoff * 100}ms`);
+                this.setState(FSM.FSM_STARTING);
+                this.waitOn(new FSM.FsmSleep(this.env, this.backoff * 100));
+                this.backoff *= 2;
+              }
               else if (err)
               {
                 this.fsmResult.setState(FSM.FSM_ERROR);
@@ -1168,6 +1183,7 @@ export class DynamoQuery extends DB.DBQuery
               }
               else
               {
+                this.backoff = 1;
                 if (result.Items && result.Items.length > 0)
                   result.Items.forEach((i: any) => this.fsmResult.push(this.dyncol.toExternal(i)));
                 if (result.LastEvaluatedKey)
