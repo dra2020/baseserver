@@ -1038,6 +1038,7 @@ export class DynamoFind extends DB.DBFind
               {
                 this.trace.log();
                 this.env.log.error({ event: 'dynamodb: query error', detail: JSON.stringify(err) });
+                this.env.log.chatter(`dynamodb: query error: ${JSON.stringify(err)}`);
                 this.setState(FSM.FSM_ERROR);
               }
               else
@@ -1163,6 +1164,7 @@ export class DynamoQuery extends DB.DBQuery
                 this.setState(FSM.FSM_ERROR);
                 this.trace.log();
                 this.env.log.error({ event: 'dynamodb: query error', detail: JSON.stringify(err) });
+                this.env.log.chatter(`dynamodb: query error: ${JSON.stringify(err)}`);
               }
               else
               {
