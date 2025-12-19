@@ -480,8 +480,8 @@ export class StorageBlob
       if (! this.fsmLoad.done)
         this.fsmLoad.setState(this.isLoadFailed() ? FSM.FSM_ERROR : FSM.FSM_DONE);
 
-      // Support auto-delete behavior
-      if (this.params.deleteAfterLoad)
+      // Support auto-delete behavior, but only on success so we can retry on failure
+      if (!this.isLoadFailed() && this.params.deleteAfterLoad)
         this.startDelete(this.env.storageManager);
     }
 
