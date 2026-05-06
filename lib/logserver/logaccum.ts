@@ -1052,6 +1052,19 @@ export class LogAccumulator
 
   static unquoteFields(fields: string[]): string[]
   {
+    // Return one past the entry that has trailing quote
+    function findMatchingEnd(i: number): number
+    {
+      let j = i;
+      for (; j < fields.length; j++)
+        if (fields[j].lastIndexOf("'") == fields[j].length-1)
+        {
+          j++;
+          break;
+        }
+      return j;
+    }
+
     // if field begins with ' strip that character and merge with subsequent
     // fields until encountering field that ends with ' (which might be same field).
     for (let i: number = 0; i < fields.length; )
@@ -1059,37 +1072,15 @@ export class LogAccumulator
       let field = fields[i];
       if (field.indexOf("'") == 0)
       {
-        let accum = field.substring(1);
-        let iStart = i;
-        do
-        {
-          if (accum.lastIndexOf("'") == accum.length-1)
-          {
-            accum = accum.substring(0, accum.length-1);
-            fields.splice(iStart, i-iStart);
-            fields[iStart] = accum;
-            i++;
-            accum = null;
-            break;
-          }
-          else
-          {
-            i++;
-            if (i < fields.length)
-              accum += fields[i];
-          }
-        }
-        while (i < fields.length);
-
-        // if never encountered closing quote...
-        if (accum != null)
-        {
-          fields.splice(iStart, i-iStart);
-          fields[iStart] = accum;
-        }
+        let j = findMatchingEnd(i);
+        let accum = fields.slice(i, j).join('').slice(1, -1);
+        if (accum.length > 1 && accum.lastIndexOf("'") == accum.length-1)
+          accum = accum.slice(1, -1);
+        else
+          accum = accum.substring(1);
+        fields.splice(i, j-i, accum);
       }
-      else
-        i++;
+      i++;
     }
     return fields;
   }
