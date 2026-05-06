@@ -31,6 +31,17 @@ export interface EnvironmentEx
   dbx: DynamoClient;
 }
 
+function detailString(o: any): string
+{
+  let s = JSON.stringify(o);
+  if (s.length > 1024)
+    if (typeof o === 'object' && typeof o?.message === 'string')
+      s = o.message;
+  if (s.length > 1024)
+    s = "error-string-too-long";
+  return s;
+}
+
 const DBDynamoContextDefaults: Context.ContextValues =
 {
   dynamo_error_frequency: 0,
@@ -101,7 +112,7 @@ function rawTypedValue(o: any): any
 function rawNakedValue(o: any): any
 {
   if (Util.countKeys(o) !== 1)
-    throw new Error(`dynamodb: only expect one key in typed value: ${JSON.stringify(o)}`);
+    throw new Error(`dynamodb: only expect one key in typed value: ${detailString(o)}`);
 
   for (let p in o) if (o.hasOwnProperty(p))
   {
@@ -211,8 +222,8 @@ class FsmListTables extends FSM.Fsm
               //console.log(`7: AWS testing: DynamoDB.listTables called`);
               if (err)
               {
-                //console.log(`dynamodb: listTables error: ${JSON.stringify(err)}`);
-                this.env.log.error({ event: 'dynamodb: listTables', detail: JSON.stringify(err) });
+                //console.log(`dynamodb: listTables error: ${detailString(err)}`);
+                this.env.log.error({ event: 'dynamodb: listTables', detail: detailString(err) });
                 this.setState(FSM.FSM_ERROR);
               }
               else
@@ -242,8 +253,8 @@ class FsmListTables extends FSM.Fsm
                 //console.log(`8: AWS testing: DynamoDB.describeTable called`);
                 if (err)
                 {
-                  //console.log(`dynamodb: describeTable error: ${JSON.stringify(err)}`);
-                  this.env.log.error({ event: 'dynamodb: describeTable', detail: JSON.stringify(err) });
+                  //console.log(`dynamodb: describeTable error: ${detailString(err)}`);
+                  this.env.log.error({ event: 'dynamodb: describeTable', detail: detailString(err) });
                   this.setState(FSM.FSM_ERROR);
                 }
                 else
@@ -497,8 +508,8 @@ class FsmExecuteCreate extends FSM.Fsm
         //console.log(`9: AWS testing: DynamoDB.createTable called`);
         if (err)
         {
-          //console.log(`dynamodb: createTable error: ${JSON.stringify(err)}`);
-          this.env.log.error({ event: 'dynamodb: createTable', detail: JSON.stringify(err) });
+          //console.log(`dynamodb: createTable error: ${detailString(err)}`);
+          this.env.log.error({ event: 'dynamodb: createTable', detail: detailString(err) });
           this.setState(FSM.FSM_ERROR);
         }
         else
@@ -759,7 +770,7 @@ export class DynamoUpdate extends DB.DBUpdate
     this.__name = `${col.__name}.update`;
     if (this.query.Key === undefined)
     {
-      console.log(`dynamodb: DynamoUpdate internal failure: colquery missing Key: ${JSON.stringify(query)}`);
+      console.log(`dynamodb: DynamoUpdate internal failure: colquery missing Key: ${detailString(query)}`);
       this.setState(FSM.FSM_ERROR);
     }
     else
@@ -807,7 +818,7 @@ export class DynamoUpdate extends DB.DBUpdate
             {
               this.setState(FSM.FSM_ERROR);
               this.trace.log();
-              this.env.log.error({ event: 'dynamodb: update error', detail: `error: ${JSON.stringify(err)} query: ${JSON.stringify(params)}` });
+              this.env.log.error({ event: 'dynamodb: update error', detail: `error: ${detailString(err)} query: ${detailString(params)}` });
             }
             else
             {
@@ -815,7 +826,7 @@ export class DynamoUpdate extends DB.DBUpdate
               this.result = this.dyncol.toExternal(result.Attributes);
               this.trace.log();
               if (this.env.context.xnumber('verbosity'))
-                this.env.log.event({ event: 'dynamodb: updateItem', detail: JSON.stringify(result) });
+                this.env.log.event({ event: 'dynamodb: updateItem', detail: detailString(result) });
             }
           });
       }
@@ -834,7 +845,7 @@ export class DynamoUnset extends DB.DBUnset
     this.__name = `${col.__name}.unset`;
     if (this.query.Key === undefined)
     {
-      console.log(`dynamodb: DynamoUnset internal failure: query missing Key: ${JSON.stringify(query)}`);
+      console.log(`dynamodb: DynamoUnset internal failure: query missing Key: ${detailString(query)}`);
       this.setState(FSM.FSM_ERROR);
     }
     else
@@ -877,7 +888,7 @@ export class DynamoUnset extends DB.DBUnset
             {
               this.setState(FSM.FSM_ERROR);
               this.trace.log();
-              this.env.log.error({ event: 'dynamodb: unset error', detail: `error: ${JSON.stringify(err)} query: ${JSON.stringify(params)}` });
+              this.env.log.error({ event: 'dynamodb: unset error', detail: `error: ${detailString(err)} query: ${detailString(params)}` });
             }
             else
             {
@@ -885,7 +896,7 @@ export class DynamoUnset extends DB.DBUnset
               this.result = this.dyncol.toExternal(result.Attributes);
               this.trace.log();
               if (this.env.context.xnumber('verbosity'))
-                this.env.log.event({ event: 'dynamodb: unset', detail: JSON.stringify(result) });
+                this.env.log.event({ event: 'dynamodb: unset', detail: detailString(result) });
             }
           });
       }
@@ -904,7 +915,7 @@ export class DynamoDelete extends DB.DBDelete
     this.__name = `${col.__name}.delete`;
     if (this.query.Key === undefined)
     {
-      console.log(`dynamodb: DynamoDelete internal failure: query missing Key: ${JSON.stringify(query)}`);
+      console.log(`dynamodb: DynamoDelete internal failure: query missing Key: ${detailString(query)}`);
       this.setState(FSM.FSM_ERROR);
     }
     else
@@ -945,7 +956,7 @@ export class DynamoDelete extends DB.DBDelete
             {
               this.setState(FSM.FSM_ERROR);
               this.trace.log();
-              this.env.log.error({ event: 'dynamodb: deleteItem: error', detail: JSON.stringify(err) });
+              this.env.log.error({ event: 'dynamodb: deleteItem: error', detail: detailString(err) });
             }
             else
             {
@@ -953,7 +964,7 @@ export class DynamoDelete extends DB.DBDelete
               this.result = result;
               this.trace.log();
               if (this.env.context.xnumber('verbosity'))
-                this.env.log.event({ event: 'dynamodb: deleteItem: succeeded', detail: JSON.stringify(result) });
+                this.env.log.event({ event: 'dynamodb: deleteItem: succeeded', detail: detailString(result) });
             }
           });
       }
@@ -972,7 +983,7 @@ export class DynamoFind extends DB.DBFind
     this.__name = `${col.__name}.find`;
     if (this.filter.Key === undefined && this.filter.IndexName === undefined)
     {
-      console.log(`dynamodb: DynamoFind internal failure: (col=${col.name}) missing Key: ${JSON.stringify(filter)}`);
+      console.log(`dynamodb: DynamoFind internal failure: (col=${col.name}) missing Key: ${detailString(filter)}`);
       this.setState(FSM.FSM_ERROR);
     }
     else
@@ -1015,14 +1026,14 @@ export class DynamoFind extends DB.DBFind
               {
                 this.setState(FSM.FSM_ERROR);
                 this.trace.log();
-                this.env.log.error({ event: 'dynamodb: getItem error', detail: JSON.stringify(err) });
+                this.env.log.error({ event: 'dynamodb: getItem error', detail: detailString(err) });
               }
               else
               {
                 this.result = this.dyncol.toExternal(result.Item);
                 this.trace.log();
                 if (this.env.context.xnumber('verbosity'))
-                  this.env.log.event( { event: 'dynamodb: getItem', detail: JSON.stringify(result) });
+                  this.env.log.event( { event: 'dynamodb: getItem', detail: detailString(result) });
                 this.setState(FSM.FSM_DONE);
               }
             });
@@ -1043,8 +1054,8 @@ export class DynamoFind extends DB.DBFind
               else if (err)
               {
                 this.trace.log();
-                this.env.log.error({ event: 'dynamodb: query error in find', detail: JSON.stringify(err) });
-                this.env.log.chatter(`dynamodb: query error: ${JSON.stringify(err)}`);
+                this.env.log.error({ event: 'dynamodb: query error in find', detail: detailString(err) });
+                this.env.log.chatter(`dynamodb: query error: ${detailString(err)}`);
                 this.setState(FSM.FSM_ERROR);
               }
               else
@@ -1087,7 +1098,7 @@ export class DynamoQuery extends DB.DBQuery
     this.trace = new LogAbstract.AsyncTimer(env.log, `dynamodb: query(col=${col.name})`);
     this.backoff = 1;
     if (this.env.context.xnumber('verbosity'))
-      this.env.log.event({ event: `dynamodb: query in ${col.name}`, detail: JSON.stringify(filter) });
+      this.env.log.event({ event: `dynamodb: query in ${col.name}`, detail: detailString(filter) });
   }
 
   get env(): Environment { return this._env as Environment; }
@@ -1118,7 +1129,7 @@ export class DynamoQuery extends DB.DBQuery
           this.fsmResult.setState(FSM.FSM_ERROR);
           this.setState(FSM.FSM_ERROR);
           this.trace.log();
-          this.env.log.error({ event: 'dynamodb: query error', detail: JSON.stringify(err) });
+          this.env.log.error({ event: 'dynamodb: query error', detail: detailString(err) });
         }
         else
         {
@@ -1178,8 +1189,8 @@ export class DynamoQuery extends DB.DBQuery
                 this.fsmResult.setState(FSM.FSM_ERROR);
                 this.setState(FSM.FSM_ERROR);
                 this.trace.log();
-                this.env.log.error({ event: 'dynamodb: query error', detail: JSON.stringify(err) });
-                this.env.log.chatter(`dynamodb: query error: ${JSON.stringify(err)}`);
+                this.env.log.error({ event: 'dynamodb: query error', detail: detailString(err) });
+                this.env.log.chatter(`dynamodb: query error: ${detailString(err)}`);
               }
               else
               {
@@ -1198,7 +1209,7 @@ export class DynamoQuery extends DB.DBQuery
                   this.setState(FSM.FSM_DONE);
                 }
                 if (this.env.context.xnumber('verbosity'))
-                  this.env.log.event( { event: 'dynamodb: query', detail: JSON.stringify(result) });
+                  this.env.log.event( { event: 'dynamodb: query', detail: detailString(result) });
               }
             });
         }
@@ -1278,8 +1289,8 @@ export class FsmTableShards extends FSM.Fsm
               //console.log(`16: AWS testing: DynamoStream.listStreams called`);
               if (err)
               {
-                console.log(`dynamodb: listStreams error: ${JSON.stringify(err)}`);
-                this.env.log.error({ event: 'dynamodb: listStreams', detail: JSON.stringify(err) });
+                console.log(`dynamodb: listStreams error: ${detailString(err)}`);
+                this.env.log.error({ event: 'dynamodb: listStreams', detail: detailString(err) });
                 this.fsmResult.setState(FSM.FSM_ERROR);
                 this.setState(FSM.FSM_ERROR);
               }
@@ -1316,8 +1327,8 @@ export class FsmTableShards extends FSM.Fsm
               //console.log(`17: AWS testing: DynamoStream.describeStream called`);
               if (err)
               {
-                console.log(`dynamodb: describeStream failure: ${JSON.stringify(err)}`);
-                this.env.log.error({ event: 'dynamodb: describeStream', detail: JSON.stringify(err) });
+                console.log(`dynamodb: describeStream failure: ${detailString(err)}`);
+                this.env.log.error({ event: 'dynamodb: describeStream', detail: detailString(err) });
                 this.setState(FSM.FSM_ERROR);
               }
               else
@@ -1438,8 +1449,8 @@ class FsmReadOneShard extends FSM.Fsm
                 return;
               if (err)
               {
-                console.log(`dynamodb: getShardIterator: failure: ${JSON.stringify(err)}`);
-                this.env.log.error({ event: 'dynamodb: getShardIterator', detail: JSON.stringify(err) });
+                console.log(`dynamodb: getShardIterator: failure: ${detailString(err)}`);
+                this.env.log.error({ event: 'dynamodb: getShardIterator', detail: detailString(err) });
                 this.setState(FSM.FSM_ERROR);
               }
               else
@@ -1461,8 +1472,8 @@ class FsmReadOneShard extends FSM.Fsm
                 return;
               if (err)
               {
-                console.log(`dynamodb: getRecords: failure: ${JSON.stringify(err)}`);
-                this.env.log.error({ event: 'dynamodb: getRecords', detail: JSON.stringify(err) });
+                console.log(`dynamodb: getRecords: failure: ${detailString(err)}`);
+                this.env.log.error({ event: 'dynamodb: getRecords', detail: detailString(err) });
                 this.setState(FSM.FSM_ERROR);
               }
               else
