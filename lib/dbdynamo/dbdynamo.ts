@@ -818,6 +818,7 @@ export class DynamoUpdate extends DB.DBUpdate
             {
               this.setState(FSM.FSM_ERROR);
               this.trace.log();
+              console.log(`dynamodb: update error: ${detailString(err)} query: ${detailString(params)}`);
               this.env.log.error({ event: 'dynamodb: update error', detail: `error: ${detailString(err)} query: ${detailString(params)}` });
             }
             else
@@ -1026,6 +1027,7 @@ export class DynamoFind extends DB.DBFind
               {
                 this.setState(FSM.FSM_ERROR);
                 this.trace.log();
+                console.log(`dynamodb: getItem error: detail: ${detailString(err)}`);
                 this.env.log.error({ event: 'dynamodb: getItem error', detail: detailString(err) });
               }
               else
