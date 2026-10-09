@@ -88,7 +88,7 @@ export class DBClient extends FSM.Fsm
   createCollection(name: string, options: any): DBCollection {  return new DBCollection(this.env, this, name, options); }
   createStream(col: DBCollection): FSM.FsmArray { return null; }
   closeStream(col: DBCollection): void {}
-  createUpdate(col: DBCollection, query: any, values: any): DBUpdate { return new DBUpdate(this.env, col, query, values); }
+  createUpdate(col: DBCollection, query: any, values: any, options?: DBUpdateOptions): DBUpdate { return new DBUpdate(this.env, col, query, values, options); }
   createUnset(col: DBCollection, query: any, values: any): DBUnset { return new DBUnset(this.env, col, query, values); }
   createDelete(col: DBCollection, query: any): DBDelete { return new DBDelete(this.env, col, query); }
   createFind(col: DBCollection, filter: any): DBFind { return new DBFind(this.env, col, filter); }
@@ -121,14 +121,34 @@ export class DBCollection extends FSM.Fsm
     }
 }
 
+/**
+ * Options for a conditional write.
+ *
+ * `condition` is declarative rather than a raw backend expression so the abstract layer stays
+ * backend-neutral:
+ *   'notexists' - write only if no item with this key exists (claim / insert-if-absent)
+ *   'exists'    - write only if an item with this key already exists (update-only)
+ *
+ * A write whose condition is not met is NOT an error. The Fsm completes normally with
+ * `conditionFailed` true and `result` null, because "someone else got there first" is an expected
+ * outcome of a race, not a failure to be logged and retried.
+ */
+export interface DBUpdateOptions
+{
+  condition?: 'notexists' | 'exists';
+}
+
 export class DBUpdate extends FSM.Fsm
 {
   col: DBCollection;
   query: any;
   values: any;
   result: any;
+  options: DBUpdateOptions;
+  /** True when options.condition was not met, so nothing was written. Never set without options. */
+  conditionFailed: boolean;
 
-  constructor(env: DBEnvironment, col: DBCollection, query: any, values: any)
+  constructor(env: DBEnvironment, col: DBCollection, query: any, values: any, options?: DBUpdateOptions)
     {
       super(env);
       this.waitOn(col);
@@ -136,6 +156,8 @@ export class DBUpdate extends FSM.Fsm
       this.query = query;
       this.values = values;
       this.result = undefined;
+      this.options = options || {};
+      this.conditionFailed = false;
     }
 }
 

@@ -348,9 +348,9 @@ export class DynamoClient extends DB.DBClient
     if (this.done) this.setState(FSM_CREATE);
   }
 
-  createUpdate(col: DynamoCollection, query: any, values: any): DB.DBUpdate
+  createUpdate(col: DynamoCollection, query: any, values: any, options?: DB.DBUpdateOptions): DB.DBUpdate
   {
-    let update = new DynamoUpdate(this.env, col, query, values);
+    let update = new DynamoUpdate(this.env, col, query, values, options);
     if (query && query.id)
       this.serializerUpdate.serialize(query.id, update);
     this.fsmAPIWatch.setPending(update);
@@ -764,9 +764,9 @@ export class DynamoUpdate extends DB.DBUpdate
   trace: LogAbstract.AsyncTimer;
   __name: string;
 
-  constructor(env: Environment, col: DynamoCollection, query: any, values: any)
+  constructor(env: Environment, col: DynamoCollection, query: any, values: any, options?: DB.DBUpdateOptions)
   {
-    super(env, col, col.toInternalQuery(query), col.toInternalExpression(values));
+    super(env, col, col.toInternalQuery(query), col.toInternalExpression(values), options);
     this.__name = `${col.__name}.update`;
     if (this.query.Key === undefined)
     {
@@ -806,6 +806,23 @@ export class DynamoUpdate extends DB.DBUpdate
         let params: any = Util.shallowAssignImmutable(this.query, this.values);
         params.UpdateExpression = this.dyncol.toUpdateExpression(params);
         params.ReturnValues = 'ALL_NEW';
+        // A conditional write is expressed against the table's own key attributes, which is what
+        // makes it atomic: the key is in the base table, so the check and the write happen together
+        // under the item's lock. Derived from params.Key rather than taken from the caller so the
+        // abstract layer never has to know the key name.
+        if (this.options.condition && params.Key)
+        {
+          // Via ExpressionAttributeNames placeholders rather than the bare attribute name: key names
+          // are arbitrary and some ('name', 'status', ...) are DynamoDB reserved words.
+          const fn = this.options.condition === 'notexists' ? 'attribute_not_exists' : 'attribute_exists';
+          const tests: string[] = [];
+          Object.keys(params.Key).forEach((k, i) => {
+              const ph = `#ck${i}`;
+              params.ExpressionAttributeNames[ph] = k;
+              tests.push(`${fn}(${ph})`);
+            });
+          if (tests.length) params.ConditionExpression = tests.join(' AND ');
+        }
         if (params.UpdateExpression === '')
         {
           this.setState(FSM.FSM_DONE);
@@ -814,6 +831,16 @@ export class DynamoUpdate extends DB.DBUpdate
             //console.log(`10: AWS testing: DynamoDB.updateItem called`);
             if (this.done)
               return;
+            else if (err && (err.name === 'ConditionalCheckFailedException'
+                             || err.code === 'ConditionalCheckFailedException'))
+            {
+              // Expected outcome of a race, not a failure: another writer got there first. Completes
+              // normally so the caller can branch on conditionFailed, and is NOT logged as an error.
+              this.conditionFailed = true;
+              this.result = null;
+              this.setState(FSM.FSM_DONE);
+              this.trace.log();
+            }
             else if (err)
             {
               this.setState(FSM.FSM_ERROR);
