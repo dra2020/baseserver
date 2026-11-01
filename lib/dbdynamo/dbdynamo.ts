@@ -13,6 +13,7 @@ import { Util, LogAbstract, Context, FSM } from '@dra2020/baseclient';
 import * as DB from '../dbabstract/all';
 import * as Storage from '../storage/all';
 import { FsmAPIWatch } from '../utils/all';
+import { DefaultCollectionOptions, toCollectionOptions, toTableName, FsmProvisionTables, ProvisionOptions } from './provision';
 
 export interface Environment
 {
@@ -197,96 +198,27 @@ const FSM_LISTING = FSM.FSM_CUSTOM1;
 const FSM_DESCRIBING = FSM.FSM_CUSTOM2;
 const FSM_DESCRIBE = FSM.FSM_CUSTOM3;
 
-class FsmListTables extends FSM.Fsm
-{
-  tables: any;
-  workStack: string[];
-
-  constructor(env: Environment)
-  {
-    super(env);
-    this.tables = {};
-  }
-
-  get env(): EnvironmentEx { return this._env as EnvironmentEx }
-
-  tick(): void
-  {
-    if (this.ready)
-    {
-      switch (this.state)
-      {
-        case FSM.FSM_STARTING:
-          this.setState(FSM_LISTING);
-          this.env.dbx.dynamodb.listTables({}, (err: any, result: any) => {
-              //console.log(`7: AWS testing: DynamoDB.listTables called`);
-              if (err)
-              {
-                //console.log(`dynamodb: listTables error: ${detailString(err)}`);
-                this.env.log.error({ event: 'dynamodb: listTables', detail: detailString(err) });
-                this.setState(FSM.FSM_ERROR);
-              }
-              else
-              {
-                if (result.TableNames)
-                  result.TableNames.forEach((name: string) => this.tables[name] = {});
-                this.workStack = Object.keys(this.tables);
-                this.setState(FSM_DESCRIBE);
-              }
-            });
-          break;
-
-        case FSM_LISTING:
-        case FSM_DESCRIBING:
-          // Waiting for callback to move out of this state
-          break;
-
-        case FSM_DESCRIBE:
-          // 07.09.25: Actually, we don't need table description and it is expensive to fetch on every
-          // startup. Let's skip this. The only information required is existence, which we set above.
-          this.workStack = [];
-          if (this.workStack && this.workStack.length > 0)
-          {
-            this.setState(FSM_DESCRIBING);
-            let params: any = { TableName: this.workStack.pop() };
-            this.env.dbx.dynamodb.describeTable(params, (err: any, result: any) => {
-                //console.log(`8: AWS testing: DynamoDB.describeTable called`);
-                if (err)
-                {
-                  //console.log(`dynamodb: describeTable error: ${detailString(err)}`);
-                  this.env.log.error({ event: 'dynamodb: describeTable', detail: detailString(err) });
-                  this.setState(FSM.FSM_ERROR);
-                }
-                else
-                {
-                  this.tables[params.TableName] = result.Table;
-                  this.setState(FSM_DESCRIBE);
-                }
-              });
-          }
-          else
-            this.setState(FSM.FSM_DONE);
-          break;
-      }
-    }
-  }
-}
-
 export function create(env: Environment): DB.DBClient { return new DynamoClient(env) }
 
-const FSM_CREATE = FSM.FSM_CUSTOM8;
-const FSM_CREATING = FSM.FSM_CUSTOM9;
+// A table or index that does not exist shows up as one of these errors. Tables are only created by explicit
+// provisioning (provisionTables, run by the dra-cli provision tool), so this is a deployment step that was missed.
+function missingResource(err: any): string
+{
+  const name = err?.name || err?.code || err?.Code;
+  if (name === 'ResourceNotFoundException')
+    return 'table';
+  if (name === 'ValidationException' && /specified index/i.test(String(err?.message)))
+    return 'index';
+  return null;
+}
 
 export class DynamoClient extends DB.DBClient
 {
   serializerUpdate: FSM.FsmSerializer;
   fsmAPIWatch: FsmAPIWatch;
-  fsmListTables: FsmListTables;
   dynamodb: DynamoDB;
   dynamostream: DynamoDBStreams;
-  pendingCols: DynamoCollection[];
   existingCols: { [name: string]: DynamoCollection };
-  bList: boolean;
 
   constructor(env: Environment)
   {
@@ -304,7 +236,6 @@ export class DynamoClient extends DB.DBClient
     this.dynamodb = new DynamoDB({apiVersion: '2012-08-10', region: 'us-west-2'});
     this.dynamostream = new DynamoDBStreams({apiVersion: '2012-08-10', region: 'us-west-2'});
 
-    this.pendingCols = [];
     this.existingCols = {};
     this.serializerUpdate = new FSM.FsmSerializer(env);
     this.fsmAPIWatch = new FsmAPIWatch(env, { title: 'DBDynamo' } );
@@ -316,17 +247,11 @@ export class DynamoClient extends DB.DBClient
   get DBName(): string { return this.Production ? 'prod' : 'dev'; }
   get dynamoErrorFrequency(): number { return this.env.context.xnumber('dynamo_error_frequency'); }
 
+  // The table is assumed to exist (no AWS call is made here). Tables are created explicitly with provisionTables.
   createCollection(name: string, options: any): DB.DBCollection
   {  
     if (this.existingCols[name]) return this.existingCols[name];
-    const defaultOptions: any = { Schema: { id: 'S' }, KeySchema: { id: 'HASH' } };
-    options = Util.deepCopy(Util.shallowAssignImmutable(defaultOptions, options));
-    options.AttributeDefinitions = DB.fromCompactSchema(options.Schema);
-    options.KeySchema = DB.fromCompactKey(options.KeySchema);
-    if (options.GlobalSecondaryIndexes)
-      options.GlobalSecondaryIndexes = options.GlobalSecondaryIndexes.map((v: any) => DB.fromCompactIndex(v));
-    let col = new DynamoCollection(this.env, this, name, options);
-    this.ensureCollection(col);
+    let col = new DynamoCollection(this.env, this, name, toCollectionOptions(options));
     this.existingCols[name] = col;
     this.fsmAPIWatch.setPending(col);
     return col;
@@ -342,10 +267,12 @@ export class DynamoClient extends DB.DBClient
     col.closeStream();
   }
 
-  ensureCollection(col: DynamoCollection): void
+  // Explicit provisioning: report on, and with options.create create, the tables (and their global secondary
+  // indexes) for a set of compact schemas keyed by collection name. Needs dynamodb:ListTables, DescribeTable and,
+  // to create, CreateTable and UpdateTable, so it is meant for administrative tools, not servers or lambdas.
+  provisionTables(schemas: { [name: string]: any }, options?: ProvisionOptions): FsmProvisionTables
   {
-    this.pendingCols.push(col);
-    if (this.done) this.setState(FSM_CREATE);
+    return new FsmProvisionTables(this.env, this.dynamodb, this.DBName, schemas, options);
   }
 
   createUpdate(col: DynamoCollection, query: any, values: any, options?: DB.DBUpdateOptions): DB.DBUpdate
@@ -410,133 +337,10 @@ export class DynamoClient extends DB.DBClient
 
   tick(): void
   {
-    if (this.ready && this.isDependentError)
-      this.setState(FSM.FSM_ERROR);
-    else if (this.ready)
-    {
-      switch (this.state)
-      {
-        case FSM.FSM_STARTING:
-          if (this.bList || this.fsmListTables == null)
-          {
-            this.fsmListTables = new FsmListTables(this.env);
-            this.waitOn(this.fsmListTables);
-            this.setState(FSM_LISTING);
-            this.bList = false;
-          }
-          this.setState(FSM_LISTING);
-          break;
-        case FSM_LISTING:
-          this.setState(this.pendingCols.length > 0 ? FSM_CREATE : FSM.FSM_DONE);
-          break;
-        case FSM_CREATE:
-          // while there are tables to create, create them, otherwise re-list the tables
-          while (this.pendingCols.length)
-          {
-            let col = this.pendingCols.pop();
-            if (this.fsmListTables.tables[col.col.TableName] === undefined)
-            {
-              this.waitOn(new FsmExecuteCreate(this.env, col));
-              this.setState(FSM_CREATING);
-              return;
-            }
-          }
-          this.setState(FSM.FSM_STARTING);
-          break;
-        case FSM_CREATING:
-          this.bList = true;
-          this.setState(FSM_CREATE);
-          break;
-      }
-    }
+    if (this.ready && this.state == FSM.FSM_STARTING)
+      this.setState(FSM.FSM_DONE);
   }
 }
-
-class FsmExecuteCreate extends FSM.Fsm
-{
-  col: DynamoCollection;
-
-  constructor(env: Environment, col: DynamoCollection)
-  {
-    super(env);
-    this.col = col;
-  }
-
-  get env(): Environment { return this._env as Environment }
-
-  create(): void
-  {
-    let i: number;
-    let options: any = {};
-    options.TableName = this.col.col.TableName;
-    options.AttributeDefinitions = this.col.options.AttributeDefinitions;
-    options.BillingMode = this.col.options.BillingMode || 'PAY_PER_REQUEST';
-    //if (options.ProvisionedThroughput === undefined)
-      //options.ProvisionedThroughput = { ReadCapacityUnits: 1, WriteCapacityUnits: 1 };
-    options.StreamSpecification = this.col.options.StreamSpecification || { StreamEnabled: true, StreamViewType: 'KEYS_ONLY' };
-    if (this.col.options.GlobalSecondaryIndexes)
-    {
-      options.GlobalSecondaryIndexes = [];
-      this.col.options.GlobalSecondaryIndexes.forEach((ix: any) => {
-        if (ix.Projection === undefined)
-          ix.Projection = { ProjectionType: 'ALL' };
-        //if (ix.ProvisionedThroughput === undefined)
-          //ix.ProvisionedThroughput = { ReadCapacityUnits: '1', WriteCapacityUnits: '1' };
-        options.GlobalSecondaryIndexes.push(ix);
-      });
-    }
-
-    let keys: any = {};
-    if (this.col.options.KeySchema)
-    {
-      options.KeySchema = this.col.options.KeySchema;
-      options.KeySchema.forEach((p: any) => keys[p.AttributeName] = true);
-    }
-    if (options.GlobalSecondaryIndexes)
-      options.GlobalSecondaryIndexes.forEach((ix: any) => ix.KeySchema.forEach((p: any) => keys[p.AttributeName] = true));
-
-    // Only include attribute definitions that are used in KeySchema or SecondaryIndices
-    for (i = options.AttributeDefinitions.length - 1; i >= 0; i--)
-    {
-      let id: any = options.AttributeDefinitions[i];
-      if (keys[id.AttributeName] === undefined)
-        options.AttributeDefinitions.splice(i, 1);
-    }
-
-    this.setState(FSM.FSM_PENDING);
-    this.col.dynamodb.createTable(options, (err: any, data: any) => {
-        //console.log(`9: AWS testing: DynamoDB.createTable called`);
-        if (err)
-        {
-          //console.log(`dynamodb: createTable error: ${detailString(err)}`);
-          this.env.log.error({ event: 'dynamodb: createTable', detail: detailString(err) });
-          this.setState(FSM.FSM_ERROR);
-        }
-        else
-        {
-          this.env.log.event({ event: 'createTable', detail: options.TableName });
-          this.setState(FSM.FSM_DONE);
-        }
-      });
-  }
-
-  tick(): void
-  {
-    if (this.ready)
-    {
-      switch (this.state)
-      {
-        case FSM.FSM_STARTING:
-          this.create();
-          break;
-
-        // other state transitions happen in callback
-      }
-    }
-  }
-}
-
-const DefaultCollectionOptions = { prefix: 'dra' };
 
 export class DynamoCollection extends DB.DBCollection
 {
@@ -544,14 +348,32 @@ export class DynamoCollection extends DB.DBCollection
   keyIndex: any;
   fsmStream: FsmTableStream;
   __name: string;
+  reportedMissing: boolean;
 
   constructor(env: Environment, client: DynamoClient, name: string, options: any)
   {
     super(env, client, name, Util.shallowAssignImmutable(DefaultCollectionOptions, options));
     this.waitOn(client);
-    this.col = { TableName: `${this.options.prefix}-${client.DBName}-${name}` };
+    this.col = { TableName: toTableName(this.options.prefix, client.DBName, name) };
     this.constructIndex();
     this.__name = `dynamocollection.${name}`;
+  }
+
+  // Called on every operation error. A missing table or index gets one prominent error per collection per process
+  // (the operation's own error is still logged each time) that says how to fix it.
+  noteError(err: any): void
+  {
+    const what = missingResource(err);
+    if (what && ! this.reportedMissing)
+    {
+      this.reportedMissing = true;
+      const dev = this.dynclient.Production ? '' : ' -d';
+      const detail = `${what === 'table' ? 'table' : 'an index of table'} ${this.col.TableName} does not exist. `
+                     + `Tables and indexes are not created automatically: create it with the dra-cli provision tool `
+                     + `(node dist/dra-provision.bundle.js tables${dev} -t ${this.name} --create). AWS said: ${String(err?.message || err?.name)}`;
+      console.error(`dynamodb: MISSING ${what.toUpperCase()}: ${detail}`);
+      this.env.log.error({ event: `dynamodb: missing ${what}`, detail });
+    }
   }
 
   get env(): Environment { return this._env as Environment; }
@@ -846,6 +668,7 @@ export class DynamoUpdate extends DB.DBUpdate
               this.setState(FSM.FSM_ERROR);
               this.trace.log();
               console.log(`dynamodb: update error: ${detailString(err)} query: ${detailString(params)}`);
+              this.dyncol.noteError(err);
               this.env.log.error({ event: 'dynamodb: update error', detail: `error: ${detailString(err)} query: ${detailString(params)}` });
             }
             else
@@ -916,6 +739,7 @@ export class DynamoUnset extends DB.DBUnset
             {
               this.setState(FSM.FSM_ERROR);
               this.trace.log();
+              this.dyncol.noteError(err);
               this.env.log.error({ event: 'dynamodb: unset error', detail: `error: ${detailString(err)} query: ${detailString(params)}` });
             }
             else
@@ -984,6 +808,7 @@ export class DynamoDelete extends DB.DBDelete
             {
               this.setState(FSM.FSM_ERROR);
               this.trace.log();
+              this.dyncol.noteError(err);
               this.env.log.error({ event: 'dynamodb: deleteItem: error', detail: detailString(err) });
             }
             else
@@ -1055,6 +880,7 @@ export class DynamoFind extends DB.DBFind
                 this.setState(FSM.FSM_ERROR);
                 this.trace.log();
                 console.log(`dynamodb: getItem error: detail: ${detailString(err)}`);
+                this.dyncol.noteError(err);
                 this.env.log.error({ event: 'dynamodb: getItem error', detail: detailString(err) });
               }
               else
@@ -1083,6 +909,7 @@ export class DynamoFind extends DB.DBFind
               else if (err)
               {
                 this.trace.log();
+                this.dyncol.noteError(err);
                 this.env.log.error({ event: 'dynamodb: query error in find', detail: detailString(err) });
                 this.env.log.chatter(`dynamodb: query error: ${detailString(err)}`);
                 this.setState(FSM.FSM_ERROR);
@@ -1158,6 +985,7 @@ export class DynamoQuery extends DB.DBQuery
           this.fsmResult.setState(FSM.FSM_ERROR);
           this.setState(FSM.FSM_ERROR);
           this.trace.log();
+          this.dyncol.noteError(err);
           this.env.log.error({ event: 'dynamodb: query error', detail: detailString(err) });
         }
         else
@@ -1218,6 +1046,7 @@ export class DynamoQuery extends DB.DBQuery
                 this.fsmResult.setState(FSM.FSM_ERROR);
                 this.setState(FSM.FSM_ERROR);
                 this.trace.log();
+                this.dyncol.noteError(err);
                 this.env.log.error({ event: 'dynamodb: query error', detail: detailString(err) });
                 this.env.log.chatter(`dynamodb: query error: ${detailString(err)}`);
               }
