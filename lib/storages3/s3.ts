@@ -367,14 +367,7 @@ export class StorageManager extends Storage.StorageManager
     super(env, bucketMap);
     this.s3map = {};
 
-    if (this.env.context.xstring('aws_access_key_id') === undefined
-        || this.env.context.xstring('aws_secret_access_key') === undefined)
-    {
-      this.env.log.error('S3: not configured: exiting');
-      this.env.log.dump();
-      process.exit(1);
-    }
-
+    // AWS credentials come from the SDK's default provider chain (environment key, else the EC2 instance role).
     this.s3map[''] = new S3({apiVersion: '2006-03-01', region: 'us-west-2'});
     this.s3map['aws'] = this.s3map[''];
     if (this.env.context.xstring('b2_application_key_id') !== undefined

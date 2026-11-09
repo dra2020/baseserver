@@ -226,13 +226,8 @@ export class DynamoClient extends DB.DBClient
     env.context.setDefaults(DBDynamoContextDefaults);
     this.env.dbx = this;
 
-    if (env.context.xstring('aws_access_key_id') === undefined || env.context.xstring('aws_secret_access_key') === undefined)
-    {
-      this.env.log.error('DynamoDB: not configured: exiting');
-      this.env.log.dump();
-      process.exit(1);
-    }
-
+    // Credentials come from the SDK's default provider chain: AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY when set (a
+    // developer's key), otherwise the EC2 instance role.
     this.dynamodb = new DynamoDB({apiVersion: '2012-08-10', region: 'us-west-2'});
     this.dynamostream = new DynamoDBStreams({apiVersion: '2012-08-10', region: 'us-west-2'});
 

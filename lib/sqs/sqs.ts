@@ -424,13 +424,7 @@ export class SQSManager extends SQSManagerBase
     // Establish defaults for queues
     DefaultSQSOptions = Util.shallowAssignImmutable(DefaultSQSOptions, options);
 
-    if (this.env.context.xstring('aws_access_key_id') === undefined
-        || this.env.context.xstring('aws_secret_access_key') === undefined)
-    {
-      console.log('AWS not configured: exiting');
-      process.exit(1);
-    }
-
+    // Credentials come from the SDK's default provider chain (environment key, else the EC2 instance role).
     this.sqs = new SQS({apiVersion: '2012-11-05', region: 'us-west-2'});
     this.nameToQueue = new Map<string, FsmQueue>();
     this.msMissingReported = new Map<string, number>();
