@@ -367,13 +367,19 @@ export class StorageManager extends Storage.StorageManager
     super(env, bucketMap);
     this.s3map = {};
 
+    // Since @aws-sdk 3.729 the SDK adds CRC32 checksums to every upload (and aws-chunked trailers on
+    // streams) and validates response checksums by default. WHEN_REQUIRED keeps the pre-3.729 wire
+    // behavior - checksums only for operations that require one - on both AWS and Backblaze.
+    const checksums = { requestChecksumCalculation: 'WHEN_REQUIRED', responseChecksumValidation: 'WHEN_REQUIRED' } as const;
+
     // AWS credentials come from the SDK's default provider chain (environment key, else the EC2 instance role).
-    this.s3map[''] = new S3({apiVersion: '2006-03-01', region: 'us-west-2'});
+    this.s3map[''] = new S3({apiVersion: '2006-03-01', region: 'us-west-2', ...checksums});
     this.s3map['aws'] = this.s3map[''];
     if (this.env.context.xstring('b2_application_key_id') !== undefined
         && this.env.context.xstring('b2_application_key') !== undefined)
       this.s3map['b2'] = new S3({
                           apiVersion: '2006-03-01',
+                          ...checksums,
                           endpoint: 'https://s3.us-west-004.backblazeb2.com',
                           region: 'us-west-004',
                           credentials: {
